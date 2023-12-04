@@ -1,0 +1,56 @@
+# This patch file is from Qualcomm Technologies, Inc. and is provided under the following license:
+#
+# Copyright (c) 2025 Qualcomm Technologies, Inc. All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+From 5490bed847e2b94b64896e6fc524c5d6addf9b68 Mon Sep 17 00:00:00 2001
+From: Lei wang <leiwan@codeaurora.org>
+Date: Mon, 12 Jul 2021 12:40:37 +0800
+Subject: [PATCH] QcomModulePkg: Allow lv load recovery partition
+
+As lv does not recovery so far, so disable AVB when load recovery.
+Always update avb2.0 command line to unlock android fastbootd.
+
+Change-Id: I0f0e4d949bdd208e498b973b518b605ab2a94650
+Signed-off-by: Lei wang <leiwan@codeaurora.org>
+---
+ QcomModulePkg/Library/avb/VerifiedBoot.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/QcomModulePkg/Library/avb/VerifiedBoot.c b/QcomModulePkg/Library/avb/VerifiedBoot.c
+index 573b0d3..245baaf 100644
+--- a/QcomModulePkg/Library/avb/VerifiedBoot.c
++++ b/QcomModulePkg/Library/avb/VerifiedBoot.c
+@@ -393,7 +393,7 @@ LoadImageNoAuthWrapper (BootInfo *Info)
+   GUARD (LoadImageNoAuth (Info));
+   GUARD (StartKeyMaster ());
+ 
+-   if (!IsDynamicPartitionSupport () &&
++   if (!Info->BootIntoRecovery &&
+         !IsRootCmdLineUpdated (Info)) {
+     SystemPathLen = GetSystemPath (&SystemPath,
+                                    Info->MultiSlotBoot,
+@@ -408,6 +408,8 @@ LoadImageNoAuthWrapper (BootInfo *Info)
+     GUARD (AppendVBCmdLine (Info, SystemPath));
+   }
+ 
++  GUARD (AppendVBCmdLine (Info, VerifiedState));
++  GUARD (AppendVBCmdLine (Info, "orange"));
+   return Status;
+ }
+ 
+@@ -1466,6 +1468,10 @@ LoadImageAndAuth (BootInfo *Info, BOOLEAN HibernationResume)
+   }
+ 
+   AVBVersion = GetAVBVersion ();
++  //FIXME skip AVB for recovery partition
++  if (IsDynamicPartitionSupport () && Info->BootIntoRecovery) {
++    AVBVersion = NO_AVB;
++  }
+   DEBUG ((EFI_D_VERBOSE, "AVB version %d\n", AVBVersion));
+ 
+   /* Load and Authenticate */
+-- 
+2.7.4
+
