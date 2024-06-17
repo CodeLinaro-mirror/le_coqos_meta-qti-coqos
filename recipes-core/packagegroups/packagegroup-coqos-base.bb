@@ -7,6 +7,7 @@ PACKAGES = "packagegroup-coqos-base"
 # COQOS Trace
 RDEPENDS:${PN} += "\
     trace-emlog \
+    virglrenderer \
     "
 
 ALLOW_EMPTY:${PN} = "1"

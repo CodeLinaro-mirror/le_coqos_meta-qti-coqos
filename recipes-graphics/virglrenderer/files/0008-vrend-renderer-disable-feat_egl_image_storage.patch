@@ -1,0 +1,36 @@
+From 83e8bd2984c2e79d4238d68b9f955e3d823c7cfd Mon Sep 17 00:00:00 2001
+From: Oleksandr Gabrylchuk <ogr@qti.qualcomm.com>
+Date: Mon, 21 Oct 2024 14:31:47 +0200
+Subject: [PATCH] [WIP] vrend_renderer: Disable feat_egl_image_storage.
+
+In current implementation of virglrenderer there is support
+of blob type for EGL/Vulkan. But in EGL There is different
+mechanism to process them. One of them is using feat_egl_image_storage
+(if texture_storage feature is enabled, feat_egl_image_storage provided
+by EXT_EGL_image_storage). But function call of
+glEGLImageTargetTexStorageEXT() provided but this feature is broken
+(return GL_INVALID_OPERATION). So to be able to use texture_storage
+feature and do not brake blob support this feature should be disable.
+
+Signed-off-by: Oleksandr Gabrylchuk <ogr@qti.qualcomm.com>
+---
+ src/vrend_renderer.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/vrend_renderer.c b/src/vrend_renderer.c
+index 41e63072..beaa5ea8 100644
+--- a/src/vrend_renderer.c
++++ b/src/vrend_renderer.c
+@@ -1268,6 +1268,10 @@ static void init_features(int gl_ver, int gles_ver)
+          }
+       }
+    }
++
++   if (has_feature(feat_egl_image_storage)) {
++      clear_feature(feat_egl_image_storage);
++   }
+ }
+ 
+ static void vrend_destroy_surface(struct vrend_surface *surf)
+-- 
+2.43.2
