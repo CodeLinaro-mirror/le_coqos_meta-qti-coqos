@@ -1,0 +1,11 @@
+meta-qti-coqos
+=================
+
+OpenEmbedded/Yocto project meta-layer for QTI based platforms
+with COQOS Hypervisor support.
+
+Dependencies
+============
+
+This layer depends on: meta-qti-bsp/meta-qti-base
+
