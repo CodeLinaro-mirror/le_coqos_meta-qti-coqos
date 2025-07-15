@@ -1,0 +1,1 @@
+KERNEL=="coqoshv[0-9]", TAG+="systemd"
