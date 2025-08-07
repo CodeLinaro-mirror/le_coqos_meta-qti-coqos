@@ -1,0 +1,16 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+[Unit]
+Description=Circular buffer for COQOS Trace read service logs
+Requires=sys-devices-virtual-emlog-emlog.device var.mount
+After=sys-devices-virtual-emlog-emlog.device var.mount
+Before=trace-read.service
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/mkemlog /var/log/cs-trace.log 32768 0644
