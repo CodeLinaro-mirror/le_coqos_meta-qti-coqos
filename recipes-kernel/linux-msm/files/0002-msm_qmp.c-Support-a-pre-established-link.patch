@@ -1,0 +1,53 @@
+From 49f19e5bf039422f49b40e96c536f22e51fe0ab9 Mon Sep 17 00:00:00 2001
+From: Ulrich Meis <umeis@qti.qualcomm.com>
+Date: Mon, 11 Aug 2025 11:23:04 +0200
+Subject: [PATCH 02/11] msm_qmp.c: Support a pre-established link.
+
+Support the case that a link has already been established before Linux
+boots up. Such an entity could be the bootloader or any part of the
+firmware. A concrete use-case for this is to bringup up the QDSS clocks
+early in order to initialize ARM coresight.
+
+To support this use-case the RX worker function is extended to check for
+an already established link in the 'LINK_DISCONNECTED' state. If the
+link exists we jump directly to 'LINK_CONNECTED' and signal completion.
+
+Signed-off-by: Ulrich Meis <umeis@qti.qualcomm.com>
+---
+ drivers/mailbox/msm_qmp.c | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/mailbox/msm_qmp.c b/drivers/mailbox/msm_qmp.c
+index 2abc022bb..aa507bca0 100644
+--- a/drivers/mailbox/msm_qmp.c
++++ b/drivers/mailbox/msm_qmp.c
+@@ -567,14 +567,24 @@ static void __qmp_rx_worker(struct qmp_mbox *mbox)
+ 			mbox->mcore_mbox_size = desc.mcore.mailbox_size;
+ 			mbox->mcore_mbox_offset = desc.mcore.mailbox_offset;
+ 		}
+-		init_mcore_state(mbox);
+-		mbox->local_state = LINK_NEGOTIATION;
+ 		mbox->rx_pkt.data = kzalloc(desc.ucore.mailbox_size,
+ 					    GFP_KERNEL);
+ 		if (!mbox->rx_pkt.data) {
+ 			QMP_ERR(mdev->ilc, "Failed to allocate rx pkt\n");
+ 			break;
+ 		}
++		if (
++			(desc.mcore.link_state == QMP_MBOX_LINK_UP)&&
++			(desc.ucore.link_state == QMP_MBOX_LINK_UP)&&
++			(desc.mcore.link_state_ack == QMP_MBOX_LINK_UP)&&
++			(desc.ucore.link_state_ack == QMP_MBOX_LINK_UP)) {
++			mbox->local_state = LINK_CONNECTED;
++			complete_all(&mbox->link_complete);
++			QMP_INFO(mdev->ilc, "Found link already connected.");
++			break;
++		}
++		init_mcore_state(mbox);
++		mbox->local_state = LINK_NEGOTIATION;
+ 		QMP_INFO(mdev->ilc, "Set to link negotiation\n");
+ 		send_irq(mdev);
+ 		break;
+-- 
+2.49.0
+
