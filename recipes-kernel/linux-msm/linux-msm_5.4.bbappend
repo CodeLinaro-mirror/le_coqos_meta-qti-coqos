@@ -5,3 +5,4 @@ FILESEXTRAPATHS:append := ":${THISDIR}/files"
 #--------------------------------------------------------------------------------------------
 SRC_URI += "file://0001-clk-Introduce-get-clock-by-unique-name-API-clk_get_b.patch"
 SRC_URI += "file://0002-msm_qmp.c-Support-a-pre-established-link.patch"
+SRC_URI += "file://0003-kernel-sched-walt-walt.c-Fix-processing-CPU-cluster-.patch"

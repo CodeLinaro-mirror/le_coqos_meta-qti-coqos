@@ -1,0 +1,39 @@
+From fc1d7e096724b7293405ac4e665d3b77121d4f40 Mon Sep 17 00:00:00 2001
+From: Andrii Smolsky <asmolsky@qti.qualcomm.com>
+Date: Mon, 11 Aug 2025 11:26:05 +0200
+Subject: [PATCH 03/11] kernel/sched/walt/walt.c: Fix processing CPU cluster
+ topology updates.
+
+Iterate all CPU cores in a cluster instead of testing only the first CPU core.
+
+Kernel scheduler routines expect that CPU cores in clusters are enabled from
+the lowest index. It can not be the case in case of a hypervisor enabled
+environment. Some CPU cores with the lowest index in the cluster might not be
+included in the "boot_cpus" kernel argument parameter.
+
+Signed-off-by: Andrii Smolsky <asmolsky@qti.qualcomm.com>
+---
+ kernel/sched/walt/walt.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/kernel/sched/walt/walt.c b/kernel/sched/walt/walt.c
+index 07f5da014..215becd64 100644
+--- a/kernel/sched/walt/walt.c
++++ b/kernel/sched/walt/walt.c
+@@ -2581,7 +2581,12 @@ void walt_update_cluster_topology(void)
+ 	list_for_each_entry(cluster, &new_head, list) {
+ 		struct cpufreq_policy *policy;
+ 
+-		policy = cpufreq_cpu_get_raw(cluster_first_cpu(cluster));
++		for_each_cpu(i, &cluster->cpus)	{
++			policy = cpufreq_cpu_get_raw(i);
++			if (policy)
++				break;
++		}
++
+ 		/*
+ 		 * walt_update_cluster_topology() must be called AFTER policies
+ 		 * for all cpus are initialized. If not, simply BUG().
+-- 
+2.49.0
+
