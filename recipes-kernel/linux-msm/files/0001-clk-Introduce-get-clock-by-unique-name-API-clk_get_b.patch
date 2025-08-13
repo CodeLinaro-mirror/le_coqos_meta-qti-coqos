@@ -1,0 +1,78 @@
+From 9e398e6a2cfe3ed37640382129bffd61a81c4c28 Mon Sep 17 00:00:00 2001
+From: Anton Yakovlev <yakovlev@qti.qualcomm.com>
+Date: Mon, 11 Aug 2025 11:19:48 +0200
+Subject: [PATCH 01/11] clk: Introduce get clock by unique name API
+ clk_get_by_name().
+
+Linux kernel CCF API allows getting a reference to clock instance
+either by using device tree clock bindings or by using clock lookup
+provided by clock controller driver. In both cases, kernel assumes
+presence of hardware device (a consumer for CCF clock).
+
+Since hardware clock name must be unique in whole CCF subsystem, it
+could be used to get a reference to a clock without providing a device.
+This commit introduces new CCF API function for getting a clock by
+its name.
+
+Signed-off-by: Anton Yakovlev <yakovlev@qti.qualcomm.com>
+---
+ drivers/clk/clk.c   | 17 +++++++++++++++++
+ include/linux/clk.h | 14 ++++++++++++++
+ 2 files changed, 31 insertions(+)
+
+diff --git a/drivers/clk/clk.c b/drivers/clk/clk.c
+index eb2aae6ed..708bda709 100644
+--- a/drivers/clk/clk.c
++++ b/drivers/clk/clk.c
+@@ -622,6 +622,23 @@ struct clk *__clk_lookup(const char *name)
+ 	return !core ? NULL : core->hw->clk;
+ }
+ 
++struct clk *clk_get_by_name(const char *name)
++{
++	struct clk_core *core;
++	struct clk *clk;
++
++	core = clk_core_lookup(name);
++	if (!core)
++		return ERR_PTR(-ENOENT);
++
++	clk = clk_hw_create_clk(NULL, core->hw, NULL, NULL);
++	if (IS_ERR(clk))
++		return clk;
++
++	return clk;
++}
++EXPORT_SYMBOL_GPL(clk_get_by_name);
++
+ static void clk_core_get_boundaries(struct clk_core *core,
+ 				    unsigned long *min_rate,
+ 				    unsigned long *max_rate)
+diff --git a/include/linux/clk.h b/include/linux/clk.h
+index 7bc1effbf..1d70059dc 100644
+--- a/include/linux/clk.h
++++ b/include/linux/clk.h
+@@ -332,6 +332,20 @@ int __must_check clk_bulk_get(struct device *dev, int num_clks,
+ int __must_check clk_bulk_get_all(struct device *dev,
+ 				  struct clk_bulk_data **clks);
+ 
++/**
++ * clk_get_by_name - lookup and obtain a reference to a clock producer.
++ * @name: clock producer ID
++ *
++ * Returns a struct clk corresponding to the clock producer, or
++ * valid IS_ERR() condition containing errno.  The implementation
++ * uses @name to determine the clock producer.
++ *
++ * Drivers must assume that the clock source is not enabled.
++ *
++ * clk_get_by_name should not be called from within interrupt context.
++ */
++struct clk *clk_get_by_name(const char *name);
++
+ /**
+  * clk_bulk_get_optional - lookup and obtain a number of references to clock producer
+  * @dev: device for clock "consumer"
+-- 
+2.49.0
+
