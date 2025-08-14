@@ -1,0 +1,38 @@
+From 345e3908304bb39302af36b8918c407d4d325ab5 Mon Sep 17 00:00:00 2001
+From: Przemyslaw Marczak <mprzemys@qti.qualcomm.com>
+Date: Mon, 11 Aug 2025 12:07:48 +0200
+Subject: [PATCH 11/11] tz_log: Register hyp* related nodes only if related
+ config enabled
+
+The following debug nodes are needed to extract debug information
+related to qhee. If qhee is not present, the read from this files could
+cause a crash. Therefore, in case if are not enabled through dts, we are
+not registering this debugfs nodes.
+
+Signed-off-by: Przemyslaw Marczak <mprzemys@qti.qualcomm.com>
+---
+ drivers/firmware/qcom/tz_log.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/firmware/qcom/tz_log.c b/drivers/firmware/qcom/tz_log.c
+index b60e21f1c..5c0c60eeb 100644
+--- a/drivers/firmware/qcom/tz_log.c
++++ b/drivers/firmware/qcom/tz_log.c
+@@ -1383,6 +1383,14 @@ static int  tzdbgfs_init(struct platform_device *pdev)
+ 	}
+ 
+ 	for (i = 0; i < TZDBG_STATS_MAX; i++) {
++		/*
++		 * Don't register hyp nodes if property is not enabled
++		 * via device tree.
++		 */
++		if (((i == TZDBG_HYP_LOG) || (i == TZDBG_HYP_GENERAL))
++				&& (!tzdbg.is_hyplog_enabled))
++			continue;
++
+ 		tzdbg.debug_tz[i] = i;
+ 		dent = debugfs_create_file_unsafe(tzdbg.stat[i].name,
+ 				0444, dent_dir,
+-- 
+2.49.0
+
