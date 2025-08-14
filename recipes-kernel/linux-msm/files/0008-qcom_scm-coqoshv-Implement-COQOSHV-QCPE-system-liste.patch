@@ -1,0 +1,141 @@
+From 6f6bfac119979d6b4366d35c34d7926372798beb Mon Sep 17 00:00:00 2001
+From: Guilherme Cardinas Ramalho <gcardina@qti.qualcomm.com>
+Date: Mon, 11 Aug 2025 12:00:28 +0200
+Subject: [PATCH 08/11] qcom_scm-coqoshv: Implement COQOSHV QCPE system
+ listener service
+
+COQOSHV app-qcpe-service version 3.2.0 implements system listener service
+functionality where a VM can register a connection to QCPE VM to receive
+system listener requests from TZ re-routed by QCPE VM. The VM servicing as
+system listener VM must implement the handling of those listeners requests and
+answer back to QCPE.
+
+This commit introduces a new thread in qcom_scm-coqoshv where it sends the
+message to QCPE VM for registering itself as the system listener service VM.
+The connection of this request is blocked until QCPE VM sends an existing
+listener request as response.
+
+This functionality on qcom_scm-coqoshv is enabled through the kernel config
+QCOM_SCM_SYS_LISTENER_HOS.
+
+Signed-off-by: Guilherme Cardinas Ramalho <gcardina@qti.qualcomm.com>
+---
+ drivers/firmware/Kconfig            |  9 +++++
+ drivers/firmware/qcom_scm-coqoshv.c | 60 +++++++++++++++++++++++++++++
+ 2 files changed, 69 insertions(+)
+
+diff --git a/drivers/firmware/Kconfig b/drivers/firmware/Kconfig
+index 55b11cb83..02ebf0da4 100644
+--- a/drivers/firmware/Kconfig
++++ b/drivers/firmware/Kconfig
+@@ -287,6 +287,15 @@ config QCOM_SCM_QCPE_HOS
+ 	  in virtualized Linux, where SCM backend is QCPE (QCOM Protected
+ 	  environment).
+ 
++config QCOM_SCM_SYS_LISTENER_HOS
++   bool "Enable SCM as remote system listener on QCPE (HOS)"
++   depends on QCOM_SCM_QCPE_HOS && QCOM_SCM_LOCK_DISABLE
++   default n
++   help
++     To enable SCM to register itself as remote system listener on QCPE (HOS).
++     If enabled, system/global listeners requests from TZ are forwarded and
++     handled by SCM driver.
++
+ config QCOM_SCM_LOCK_DISABLE
+ 	bool "Disable SCM lock mechanism to allow simultaneous SMC calls over QCPE (HOS)"
+ 	depends on QCOM_SCM && QCOM_SCM_QCPE_HOS
+diff --git a/drivers/firmware/qcom_scm-coqoshv.c b/drivers/firmware/qcom_scm-coqoshv.c
+index 24883ad01..9c1f57548 100644
+--- a/drivers/firmware/qcom_scm-coqoshv.c
++++ b/drivers/firmware/qcom_scm-coqoshv.c
+@@ -26,6 +26,9 @@
+ #include "qcom_scm.h"
+ #include "qcom_scm-coqoshv.h"
+ 
++#include <linux/kthread.h>
++#include <../misc/qseecom_kernel.h>
++
+ #ifdef pr_fmt
+ #undef pr_fmt
+ #endif
+@@ -38,6 +41,14 @@
+ /* HVC trigger capability (e.g. interrupt injection) */
+ #define HVC_P_TRIGGER_CAP 0x1
+ 
++#define COQOSHV_QCPE_HVAL_MSG 0x1000
++#define COQOSHV_QCPE_SYS_LSTNR_CMD 0x1
++
++#define TIME_SERVICE 11
++#define RPMB_SERVICE 0x2000
++#define SSD_SERVICE  0x3000
++#define OPS_SERVICE  0xC000
++
+ /* 16 byte */
+ struct coqoshv_smc_header {
+         __u64 magic;
+@@ -225,6 +236,50 @@ void coqoshv_call_qcpe(const struct coqoshv_smc_mailbox *smc,
+ 	up(&coqoshv_buffer_semaphore);
+ }
+ 
++
++static int coqoshv_sys_listener_thread(void* p)
++{
++
++	struct coqoshv_smc_mailbox smc = {0};
++	struct arm_smccc_res res = {0};
++	uint32_t result = 0;
++	u64 resp_type = 0;
++	unsigned int data = 0;
++
++	smc.args[1] = COQOSHV_QCPE_HVAL_MSG;
++	smc.args[2] = COQOSHV_QCPE_SYS_LSTNR_CMD;
++
++	while(1) {
++		coqoshv_call_qcpe((const struct coqoshv_smc_mailbox *)&smc, &res, 0);
++		data = res.a3;
++		result = res.a2;
++
++		if (result == QSEOS_LISTENER_ID) {
++			if ((data == TIME_SERVICE) ||
++					(data == RPMB_SERVICE) ||
++					(data == SSD_SERVICE) ||
++					(data == OPS_SERVICE)) {
++				qseecom_process_listener_from_smcinvoke((uint32_t *)&result,
++						(u64 *)&res.a1,
++						(unsigned int *)&data);
++			} else {
++				pr_err("Service listener ID %d is unkown\n", data);
++			}
++		} else {
++			pr_err("System listener thread received a non listener SMC\n");
++		}
++
++	}
++	return 0;
++}
++
++
++static int coqoshv_sys_listener_init(void)
++{
++        kthread_run(coqoshv_sys_listener_thread, NULL, "coqoshv-sys-listener");
++        return 0;
++}
++
+ static int coqoshv_platform_init(void)
+ {
+ 	int mbox_id;
+@@ -366,6 +421,11 @@ static int coqoshv_init_qcpe(void)
+ {
+ 	if (coqoshv_platform_init())
+ 		panic("Could not initialize.\n");
++#if IS_ENABLED(CONFIG_QCOM_SCM_SYS_LISTENER_HOS)
++	if (coqoshv_sys_listener_init()) {
++		panic("Could not initialize system listener.\n");
++	}
++#endif
+ 
+ 	return 0;
+ }
+-- 
+2.49.0
+
