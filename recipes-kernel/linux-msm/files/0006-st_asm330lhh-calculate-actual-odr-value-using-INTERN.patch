@@ -1,0 +1,216 @@
+From f0e802464d9c2acf89d1afdd16018ca55a8ade34 Mon Sep 17 00:00:00 2001
+From: Anandu Sudhakaran <anansudh@qti.qualcomm.com>
+Date: Mon, 11 Aug 2025 11:38:42 +0200
+Subject: [PATCH 06/11] st_asm330lhh: calculate actual odr value using
+ INTERNAL_FREQ_FINE
+
+the actual Output Data Rate (ODR) may differ from the configured ODR
+value due to internal oscillator adjustments, environmental factors,
+and fine-tuning mechanisms such as the INTERNAL_FREQ_FINE register,
+which allows for a more accurate estimation of the a ODR.
+
+Signed-off-by: Anandu Sudhakaran <anansudh@qti.qualcomm.com>
+---
+ drivers/iio/imu/st_asm330lhh/st_asm330lhh.h   | 24 ++++---
+ .../iio/imu/st_asm330lhh/st_asm330lhh_core.c  | 66 ++++++++++++-------
+ 2 files changed, 57 insertions(+), 33 deletions(-)
+
+diff --git a/drivers/iio/imu/st_asm330lhh/st_asm330lhh.h b/drivers/iio/imu/st_asm330lhh/st_asm330lhh.h
+index 5d3ed2801..d378e5bad 100644
+--- a/drivers/iio/imu/st_asm330lhh/st_asm330lhh.h
++++ b/drivers/iio/imu/st_asm330lhh/st_asm330lhh.h
+@@ -28,7 +28,9 @@
+ 
+ #define ST_ASM330LHH_MAX_ODR			833
+ #define ST_ASM330LHH_ODR_LIST_SIZE		8
+-#define ST_ASM330LHH_ODR_EXPAND(odr, uodr)	((odr * 1000000) + uodr)
++#define ST_ASM330LHH_ODR_SCALE_FACTR		1000000ULL
++#define ST_ASM330LHH_OSCILATR_FREQ		6667ULL
++#define ST_ASM330LHH_ODR_EXPAND(odr, uodr)	((odr * ST_ASM330LHH_ODR_SCALE_FACTR) + uodr)
+ 
+ #define ST_ASM330LHH_DEV_NAME			"asm330lhh"
+ 
+@@ -206,14 +208,20 @@ struct st_asm330lhh_reg {
+  * struct st_asm330lhh_odr - Single ODR entry
+  * @hz: Most significant part of the sensor ODR (Hz).
+  * @uhz: Less significant part of the sensor ODR (micro Hz).
++ * @actual_hz: Most significant part of the actual sensor ODR (Hz) after frequency correction.
++ * @actual_uhz: Less significant part of the actual sensor ODR (micro Hz) after frequency correction.
++ * @odr_coeff: ODR_Coeff for frequency tuning. see section 9.43 in data sheet.
+  * @val: ODR register value.
+  * @batch_val: Batching ODR register value.
+  */
+ struct st_asm330lhh_odr {
+-	u16 hz;
+-	u32 uhz;
+-	u8 val;
+-	u8 batch_val;
++	const u16 hz;
++	const u32 uhz;
++	u16 actual_hz;
++	u32 actual_uhz;
++	const s16 odr_coeff;
++	const u8 val;
++	const u8 batch_val;
+ };
+ 
+ /**
+@@ -224,9 +232,9 @@ struct st_asm330lhh_odr {
+  * @odr_avl: Array of supported ODR value.
+  */
+ struct st_asm330lhh_odr_table_entry {
+-	u8 size;
+-	struct st_asm330lhh_reg reg;
+-	struct st_asm330lhh_reg batching_reg;
++	const u8 size;
++	const struct st_asm330lhh_reg reg;
++	const struct st_asm330lhh_reg batching_reg;
+ 	struct st_asm330lhh_odr odr_avl[ST_ASM330LHH_ODR_LIST_SIZE];
+ };
+ 
+diff --git a/drivers/iio/imu/st_asm330lhh/st_asm330lhh_core.c b/drivers/iio/imu/st_asm330lhh/st_asm330lhh_core.c
+index 1726df213..cf42d83e2 100644
+--- a/drivers/iio/imu/st_asm330lhh/st_asm330lhh_core.c
++++ b/drivers/iio/imu/st_asm330lhh/st_asm330lhh_core.c
+@@ -30,7 +30,7 @@
+ 
+ static int asm330_check_regulator;
+ 
+-static const struct st_asm330lhh_odr_table_entry st_asm330lhh_odr_table[] = {
++static struct st_asm330lhh_odr_table_entry st_asm330lhh_odr_table[] = {
+ 	[ST_ASM330LHH_ID_ACC] = {
+ 		.size = 7,
+ 		.reg = {
+@@ -41,13 +41,13 @@ static const struct st_asm330lhh_odr_table_entry st_asm330lhh_odr_table[] = {
+ 			.addr = ST_ASM330LHH_REG_FIFO_CTRL3_ADDR,
+ 			.mask = GENMASK(3, 0),
+ 		},
+-		.odr_avl[0] = {  12, 500000,  0x01,  0x01 },
+-		.odr_avl[1] = {  26,      0,  0x02,  0x02 },
+-		.odr_avl[2] = {  52,      0,  0x03,  0x03 },
+-		.odr_avl[3] = { 104,      0,  0x04,  0x04 },
+-		.odr_avl[4] = { 208,      0,  0x05,  0x05 },
+-		.odr_avl[5] = { 416,      0,  0x06,  0x06 },
+-		.odr_avl[6] = { 833,      0,  0x07,  0x07 },
++		.odr_avl[0] = {  12, 500000,  12, 500000, 512,  0x01,  0x01 },
++		.odr_avl[1] = {  26,      0,  26,      0, 256,  0x02,  0x02 },
++		.odr_avl[2] = {  52,      0,  52,      0, 128,  0x03,  0x03 },
++		.odr_avl[3] = { 104,      0, 104,      0,  64,  0x04,  0x04 },
++		.odr_avl[4] = { 208,      0, 208,      0,  32,  0x05,  0x05 },
++		.odr_avl[5] = { 416,      0, 416,      0,  16,  0x06,  0x06 },
++		.odr_avl[6] = { 833,      0, 833,      0,   8,  0x07,  0x07 },
+ 	},
+ 	[ST_ASM330LHH_ID_GYRO] = {
+ 		.size = 7,
+@@ -59,13 +59,13 @@ static const struct st_asm330lhh_odr_table_entry st_asm330lhh_odr_table[] = {
+ 			.addr = ST_ASM330LHH_REG_FIFO_CTRL3_ADDR,
+ 			.mask = GENMASK(7, 4),
+ 		},
+-		.odr_avl[0] = {  12, 500000,  0x01,  0x01 },
+-		.odr_avl[1] = {  26,      0,  0x02,  0x02 },
+-		.odr_avl[2] = {  52,      0,  0x03,  0x03 },
+-		.odr_avl[3] = { 104,      0,  0x04,  0x04 },
+-		.odr_avl[4] = { 208,      0,  0x05,  0x05 },
+-		.odr_avl[5] = { 416,      0,  0x06,  0x06 },
+-		.odr_avl[6] = { 833,      0,  0x07,  0x07 },
++		.odr_avl[0] = {  12, 500000, 12, 500000, 512,  0x01,  0x01 },
++		.odr_avl[1] = {  26,      0, 26,      0, 256,  0x02,  0x02 },
++		.odr_avl[2] = {  52,      0, 52,      0, 128,  0x03,  0x03 },
++		.odr_avl[3] = { 104,      0,104,      0,  64,  0x04,  0x04 },
++		.odr_avl[4] = { 208,      0,208,      0,  32,  0x05,  0x05 },
++		.odr_avl[5] = { 416,      0,416,      0,  16,  0x06,  0x06 },
++		.odr_avl[6] = { 833,      0,833,      0,   8,  0x07,  0x07 },
+ 	},
+ 	[ST_ASM330LHH_ID_TEMP] = {
+ 		.size = 2,
+@@ -73,9 +73,9 @@ static const struct st_asm330lhh_odr_table_entry st_asm330lhh_odr_table[] = {
+ 			.addr = ST_ASM330LHH_REG_FIFO_CTRL4_ADDR,
+ 			.mask = GENMASK(5, 4),
+ 		},
+-		.odr_avl[0] = { 12, 500000,   0x02,  0x02 },
+-		.odr_avl[1] = { 52,      0,   0x03,  0x03 },
+-	},
++		.odr_avl[0] = { 12, 500000, 12, 500000, 512,  0x02,  0x02 },
++		.odr_avl[1] = { 52,      0, 52,      0, 128,  0x03,  0x03 },
++		},
+ };
+ 
+ static const struct st_asm330lhh_fs_table_entry st_asm330lhh_fs_table[] = {
+@@ -311,7 +311,8 @@ static int st_asm330lhh_get_odr_calibration(struct st_asm330lhh_hw *hw)
+ 	s64 odr_calib;
+ 	int err;
+ 	s8 data;
+-
++	int id,i;
++	u64 sensor_odr,temp;
+ 	err = hw->tf->read(hw->dev,
+ 			   ST_ASM330LHH_INTERNAL_FREQ_FINE,
+ 			   sizeof(data), (u8 *)&data);
+@@ -321,9 +322,23 @@ static int st_asm330lhh_get_odr_calibration(struct st_asm330lhh_hw *hw)
+ 		return err;
+ 	}
+ 
++
+ 	odr_calib = (data * 37500) / 1000;
+ 	hw->ts_delta_ns = ST_ASM330LHH_TS_DELTA_NS - odr_calib;
+ 
++	/*calculating the actual odr rate using frequency fine tuning register value*/
++	for(id= 0;id<ST_ASM330LHH_ID_MAX;id++){
++
++		for (i = 0; i < st_asm330lhh_odr_table[id].size; i++) {
++			if(st_asm330lhh_odr_table[id].odr_avl[i].odr_coeff != 0){
++				/* This is the formula with scale factor value 1000000, ODR_Actual = (6667 + ((0.0015 * INTERNAL_FREQ_FINE) * 6667)) / ODR_Coeff*/
++				temp = (u64) ((ST_ASM330LHH_OSCILATR_FREQ*ST_ASM330LHH_ODR_SCALE_FACTR) + (1500ULL * data * ST_ASM330LHH_OSCILATR_FREQ));
++				sensor_odr = (u64)temp/st_asm330lhh_odr_table[id].odr_avl[i].odr_coeff;
++				st_asm330lhh_odr_table[id].odr_avl[i].actual_hz = (u16)(sensor_odr/ST_ASM330LHH_ODR_SCALE_FACTR);
++				st_asm330lhh_odr_table[id].odr_avl[i].actual_uhz = (u32)(sensor_odr%ST_ASM330LHH_ODR_SCALE_FACTR);
++			}
++		}
++	}
+ 	dev_info(hw->dev, "Freq Fine %lld (ts %lld)\n", odr_calib, hw->ts_delta_ns);
+ 
+ 	return 0;
+@@ -370,8 +385,8 @@ static int st_asm330lhh_get_odr_val(struct st_asm330lhh_sensor *sensor, int odr,
+ 
+ 	for (i = 0; i < st_asm330lhh_odr_table[id].size; i++) {
+ 		sensor_odr = ST_ASM330LHH_ODR_EXPAND(
+-				st_asm330lhh_odr_table[id].odr_avl[i].hz,
+-				st_asm330lhh_odr_table[id].odr_avl[i].uhz);
++				st_asm330lhh_odr_table[id].odr_avl[i].actual_hz,
++				st_asm330lhh_odr_table[id].odr_avl[i].actual_uhz);
+ 		if (sensor_odr >= required_odr)
+ 			break;
+ 	}
+@@ -382,8 +397,8 @@ static int st_asm330lhh_get_odr_val(struct st_asm330lhh_sensor *sensor, int odr,
+ 	*val = st_asm330lhh_odr_table[id].odr_avl[i].val;
+ 
+ 	if (podr && puodr) {
+-		*podr = st_asm330lhh_odr_table[id].odr_avl[i].hz;
+-		*puodr = st_asm330lhh_odr_table[id].odr_avl[i].uhz;
++		*podr = st_asm330lhh_odr_table[id].odr_avl[i].actual_hz;
++		*puodr = st_asm330lhh_odr_table[id].odr_avl[i].actual_uhz;
+ 	}
+ 
+ 	return 0;
+@@ -708,8 +723,8 @@ st_asm330lhh_sysfs_sampling_freq_avail(struct device *dev,
+ 
+ 	for (i = 0; i < st_asm330lhh_odr_table[id].size; i++) {
+ 		len += scnprintf(buf + len, PAGE_SIZE - len, "%d.%06d ",
+-				 st_asm330lhh_odr_table[id].odr_avl[i].hz,
+-				 st_asm330lhh_odr_table[id].odr_avl[i].uhz);
++				 st_asm330lhh_odr_table[id].odr_avl[i].actual_hz,
++				 st_asm330lhh_odr_table[id].odr_avl[i].actual_uhz);
+ 	}
+ 
+ 	buf[len - 1] = '\n';
+@@ -733,6 +748,7 @@ static ssize_t st_asm330lhh_sysfs_scale_avail(struct device *dev,
+ 	return len;
+ }
+ 
++
+ #ifdef CONFIG_ENABLE_ASM_ACC_GYRO_BUFFERING
+ static int asm_read_bootsampl(struct st_asm330lhh_sensor  *sensor,
+ 		unsigned long enable_read)
+-- 
+2.49.0
+
