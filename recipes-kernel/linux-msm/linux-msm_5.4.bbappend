@@ -28,6 +28,7 @@ SRC_URI += "file://disable_module_sig.cfg"
 SRC_URI += "file://enable_coresight-tmc.cfg"
 SRC_URI += "file://enable_qcom_scm_qcpe_hos.cfg"
 SRC_URI += "file://enable_qti_tz_log.cfg"
+SRC_URI += "file://enable_st_asm330lhh_modules.cfg"
 SRC_URI += "file://enable_system_listener_qcpe_hos.cfg"
 SRC_URI += "file://enable_vivid.cfg"
 
