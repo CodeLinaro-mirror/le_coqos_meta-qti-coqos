@@ -1,0 +1,99 @@
+From e2c9cc054107ac864dcab2a957f159dd8e949c85 Mon Sep 17 00:00:00 2001
+From: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+Date: Mon, 11 Aug 2025 13:39:13 +0200
+Subject: [PATCH 1/4] msm: ais: v4l2_v2: Add media subsystem support.
+
+Introduce Linux kernel media subsystem support for v4l2loopback_v2
+driver. The media subsystem is used by libcamera for device
+discovery and enumeration.
+
+Signed-off-by: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+---
+ drivers/v4l2loopback-master_v2/v4l2loopback.c | 43 ++++++++++++++++++-
+ 1 file changed, 42 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/v4l2loopback-master_v2/v4l2loopback.c b/drivers/v4l2loopback-master_v2/v4l2loopback.c
+index f1b393f8a..ae01bb4c3 100644
+--- a/drivers/v4l2loopback-master_v2/v4l2loopback.c
++++ b/drivers/v4l2loopback-master_v2/v4l2loopback.c
+@@ -33,6 +33,7 @@
+ #include <media/v4l2-fh.h>
+ #include <media/v4l2-device.h>
+ #include <media/v4l2-event.h>
++#include <media/videobuf2-v4l2.h>
+ #include <linux/dma-buf.h>
+ #include <linux/ion.h>
+ #include <linux/msm_ion.h>
+@@ -308,6 +309,10 @@ struct v4l2_loopback_device {
+ 	struct v4l2_device v4l2_dev;
+ 	struct v4l2_ctrl_handler ctrl_handler;
+ 	struct video_device *vdev;
++#ifdef CONFIG_MEDIA_CONTROLLER
++	struct media_device mdev;
++	struct media_pad vid_cap_pad;
++#endif
+ 	struct v4l2_loopback_opener *main_opener; /*proxy first opener*/
+ 
+ 	/* qcarcam open ret*/
+@@ -3028,7 +3033,12 @@ static void init_vdev(struct video_device *vdev, int nr)
+ 	MARK();
+ }
+ 
+-
++#ifdef CONFIG_MEDIA_CONTROLLER
++static const struct media_device_ops v4l2_loopback_media_ops = {
++		.req_validate = vb2_request_validate,
++		.req_queue = vb2_request_queue,
++};
++#endif
+ 
+ /* init loopback main structure */
+ static int v4l2_loopback_init(struct v4l2_loopback_device *dev, int nr)
+@@ -3040,6 +3050,16 @@ static int v4l2_loopback_init(struct v4l2_loopback_device *dev, int nr)
+ 	snprintf(dev->v4l2_dev.name, sizeof(dev->v4l2_dev.name),
+ 				"v4l2loopback-video%03d", video_nr[nr]);
+ 
++#ifdef CONFIG_MEDIA_CONTROLLER
++	/* Initialize media device */
++	dev->v4l2_dev.mdev = &dev->mdev;
++	strscpy(dev->mdev.model, "v4l2loopback", sizeof(dev->mdev.model));
++	snprintf(dev->mdev.bus_info, sizeof(dev->mdev.bus_info), "platform:v4l2loopback-%03d", nr);
++	snprintf(dev->mdev.driver_name, sizeof(dev->mdev.driver_name), "v4l2loopback");
++	media_device_init(&dev->mdev);
++	dev->mdev.ops = &v4l2_loopback_media_ops;
++#endif
++
+ 	CAM_INFO(CAM_V4L2, "v4l2_dev.name %s", dev->v4l2_dev.name);
+ 
+ 	card_label[nr] = dev->v4l2_dev.name;
+@@ -3285,6 +3305,27 @@ static int __init v4l2loopback_init_module(void)
+ 			free_devices();
+ 			return -EFAULT;
+ 		}
++
++#ifdef CONFIG_MEDIA_CONTROLLER
++		devs[i]->vdev->entity.name = devs[i]->vdev->name;
++		devs[i]->vdev->entity.function = MEDIA_ENT_F_IO_V4L;
++		devs[i]->vdev->entity.obj_type = MEDIA_ENTITY_TYPE_BASE;
++		devs[i]->vdev->entity.info.dev.major = VIDEO_MAJOR;
++		devs[i]->vdev->entity.info.dev.minor = devs[i]->vdev->minor;
++		devs[i]->vid_cap_pad.flags = MEDIA_PAD_FL_SINK;
++		media_entity_pads_init(&devs[i]->vdev->entity, 1, &devs[i]->vid_cap_pad);
++		media_device_register_entity(&devs[i]->mdev, &devs[i]->vdev->entity);
++		/* Create video interface */
++		devs[i]->vdev->intf_devnode = media_devnode_create(&devs[i]->mdev,
++			MEDIA_INTF_T_V4L_VIDEO, 0,
++			VIDEO_MAJOR, devs[i]->vdev->minor);
++		struct media_link *link = media_create_intf_link(&devs[i]->vdev->entity,
++                                               &devs[i]->vdev->intf_devnode->intf,
++                                               MEDIA_LNK_FL_ENABLED |
++                                               MEDIA_LNK_FL_IMMUTABLE);
++		media_device_register(&devs[i]->mdev);
++#endif
++
+ 		v4l2loopback_create_sysfs(devs[i]->vdev);
+ 	}
+ 
+-- 
+2.49.0
+

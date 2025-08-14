@@ -1,0 +1,71 @@
+From 69ff019f06eb8e63154d81ed7c6512a046c241ba Mon Sep 17 00:00:00 2001
+From: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+Date: Mon, 11 Aug 2025 13:41:18 +0200
+Subject: [PATCH 2/4] msm: ais: v4l2_v2: Fix v4l2 capabilities query ioctl.
+
+Linux kernel v4.7.0+ expects 'device_caps' being aligned with
+'capabilities'. Otherwise, a kernel warning will get thrown each time
+the v4l2 node is opened. Fix it by properly setting both fields in the
+vidioc_querycap ioctl.
+
+Signed-off-by: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+---
+ drivers/v4l2loopback-master_v2/v4l2loopback.c | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/v4l2loopback-master_v2/v4l2loopback.c b/drivers/v4l2loopback-master_v2/v4l2loopback.c
+index ae01bb4c3..015a4d219 100644
+--- a/drivers/v4l2loopback-master_v2/v4l2loopback.c
++++ b/drivers/v4l2loopback-master_v2/v4l2loopback.c
+@@ -753,7 +753,7 @@ static int vidioc_querycap(struct file *file, void *priv,
+ {
+ 	struct v4l2_loopback_device *dev = v4l2loopback_getdevice(file);
+ 	int devnr;
+-	__u32 capabilities;
++	__u32 capabilities = V4L2_CAP_STREAMING | V4L2_CAP_READWRITE;
+ 
+ 	if (!dev) {
+ 		CAM_ERR(CAM_V4L2, "dev is null");
+@@ -765,19 +765,15 @@ static int vidioc_querycap(struct file *file, void *priv,
+ 	CAM_DBG(CAM_V4L2, "device_caps 0x%x, capabilities 0x%x",
+ 		cap->device_caps, cap->capabilities);
+ 
+-	capabilities = V4L2_CAP_STREAMING | V4L2_CAP_READWRITE;
+-
+ 	strlcpy(cap->driver, "v4l2 loopback", sizeof(cap->driver));
+ 	vidioc_fill_name(cap->card, sizeof(cap->card), devnr);
+ 	snprintf(cap->bus_info, sizeof(cap->bus_info),
+ 			"platform:v4l2loopback-%03d", devnr);
+ 
++#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 1, 0)
+ 	/* since 3.1.0, the v4l2-core system is supposed to set the version */
+ 	cap->version = V4L2LOOPBACK_VERSION_CODE;
+-
+-#ifdef V4L2_CAP_VIDEO_M2M
+-	capabilities |= V4L2_CAP_VIDEO_M2M;
+-#endif /* V4L2_CAP_VIDEO_M2M */
++#endif
+ 
+ 	if (dev->announce_all_caps) {
+ 		capabilities |= V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_OUTPUT;
+@@ -789,11 +785,15 @@ static int vidioc_querycap(struct file *file, void *priv,
+ 			capabilities |= V4L2_CAP_VIDEO_OUTPUT;
+ 	}
+ 
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0)
++	dev->vdev->device_caps =
++#endif /* >=linux-4.7.0 */
+ 	cap->device_caps = cap->capabilities = capabilities;
+-	/* >=linux-4.7.0 */
+-	dev->vdev->device_caps = cap->device_caps;
++
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 3, 0)
+ 	/* >=linux-3.3.0 */
+ 	cap->capabilities |= V4L2_CAP_DEVICE_CAPS;
++#endif
+ 
+ 	memset(cap->reserved, 0, sizeof(cap->reserved));
+ 	CAM_DBG(CAM_V4L2, "device_caps 0x%x, capabilities 0x%x",
+-- 
+2.49.0
+
