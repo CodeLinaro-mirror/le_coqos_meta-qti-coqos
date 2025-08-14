@@ -1,0 +1,77 @@
+From 115bbd1b7f714198633f1ecda840eb3d60a32da7 Mon Sep 17 00:00:00 2001
+From: Ankurkumar Satasiya <asatasiy@qti.qualcomm.com>
+Date: Mon, 11 Aug 2025 12:00:47 +0200
+Subject: [PATCH 09/11] Add kernel patch to measure blocking time for atomic
+ SMCs.
+
+- Add log message after every 1000 atomic SMCs with minimum, maximum,
+average time, number of atomic SMCs, and total number of SMCs
+- Make it compile time configurable using QCOM_SCM_MEASURE_BLOCKING_TIME
+
+Signed-off-by: Ankurkumar Satasiya <asatasiy@qti.qualcomm.com>
+---
+ drivers/firmware/Kconfig            |  7 +++++++
+ drivers/firmware/qcom_scm-coqoshv.c | 22 ++++++++++++++++++++++
+ 2 files changed, 29 insertions(+)
+
+diff --git a/drivers/firmware/Kconfig b/drivers/firmware/Kconfig
+index 02ebf0da4..d7b1f380a 100644
+--- a/drivers/firmware/Kconfig
++++ b/drivers/firmware/Kconfig
+@@ -296,6 +296,13 @@ config QCOM_SCM_SYS_LISTENER_HOS
+      If enabled, system/global listeners requests from TZ are forwarded and
+      handled by SCM driver.
+ 
++config QCOM_SCM_MEASURE_BLOCKING_TIME
++	bool "Log atomic and non-atomic SMCs"
++	depends on QCOM_SCM_QCPE_HOS
++	default n
++	help
++	  To enable measurement of blocking time for atomic and non-atomic SMCs.
++
+ config QCOM_SCM_LOCK_DISABLE
+ 	bool "Disable SCM lock mechanism to allow simultaneous SMC calls over QCPE (HOS)"
+ 	depends on QCOM_SCM && QCOM_SCM_QCPE_HOS
+diff --git a/drivers/firmware/qcom_scm-coqoshv.c b/drivers/firmware/qcom_scm-coqoshv.c
+index 9c1f57548..61d7a64a2 100644
+--- a/drivers/firmware/qcom_scm-coqoshv.c
++++ b/drivers/firmware/qcom_scm-coqoshv.c
+@@ -193,6 +193,14 @@ void coqoshv_call_qcpe(const struct coqoshv_smc_mailbox *smc,
+ 	__u32 msg_id;
+ 	__u32 mbox_id;
+ 
++#if IS_ENABLED(CONFIG_QCOM_SCM_MEASURE_BLOCKING_TIME)
++	static long long atomic_min = LLONG_MAX, atomic_max = LLONG_MIN, atomic_avrg = 0, atomic_count = 0;
++	static smc_count = 0;
++	long long delta_time;
++	ktime_t start_time = ktime_get();
++
++	smc_count++;
++#endif
+ 	coqoshv_wait_sem(&coqoshv_buffer_semaphore, atomic);
+ 
+ 	if (unlikely(!coqoshv_initialized))
+@@ -225,6 +233,20 @@ void coqoshv_call_qcpe(const struct coqoshv_smc_mailbox *smc,
+ 			coqoshv_notify_mailboxes();
+ 	} while (shmem->args[0] == QCOM_SCM_INTERRUPTED);
+ 
++#if IS_ENABLED(CONFIG_QCOM_SCM_MEASURE_BLOCKING_TIME)
++	if(atomic) {
++		delta_time = ktime_us_delta(ktime_get(), start_time);
++		if(atomic_min > delta_time)
++			atomic_min = delta_time;
++		if(atomic_max < delta_time)
++			atomic_max = delta_time;
++		atomic_avrg += delta_time;
++		atomic_count++;
++		// Log atomic smc timings after 1000 iterations.
++		if(atomic_count%1000 == 0)
++			printk(KERN_CRIT "Total atomic SMCs %lld: Min %lld, Max %lld, Average %lld, Combined SMCs count %lld.", atomic_count, atomic_min, atomic_max, atomic_avrg/atomic_count, smc_count);
++	}
++#endif
+ 	pr_debug("x0: %lx, x1: 0x%lx, x2: 0x%lx, x3: 0x%lx, "
+ 		 "x4: %lx, x5: 0x%lx, x6: 0x%lx, x7: 0x%lx\n",
+ 		 shmem->args[0], shmem->args[1], shmem->args[2], shmem->args[3],
+-- 
+2.49.0
+
