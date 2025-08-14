@@ -1,0 +1,26 @@
+From 6aa4403fdd5da2d1677c0b51a31cff36f95a8378 Mon Sep 17 00:00:00 2001
+From: Andrii Smolsky <asmolsky@qti.qualcomm.com>
+Date: Mon, 6 Jan 2025 18:24:09 +0200
+Subject: [PATCH] emlog.c: Add "noop" implementation for fsync operation.
+
+Fix fsync() call failure while dealing with emlog implemented files.
+
+Signed-off-by: Andrii Smolsky <asmolsky@qti.qualcomm.com>
+---
+ emlog.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/emlog.c b/emlog.c
+index 4462466..d4974d7 100644
+--- a/emlog.c
++++ b/emlog.c
+@@ -465,6 +465,7 @@ static const struct file_operations emlog_fops = {
+     .release = emlog_release,
+     .poll = emlog_poll,
+     .llseek = no_llseek,        /* no_llseek by default introduced at v2.6.37-rc1 */
++    .fsync = noop_fsync,
+     .owner = THIS_MODULE,
+ };
+
+--
+2.25.1
