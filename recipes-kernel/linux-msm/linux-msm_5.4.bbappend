@@ -27,6 +27,7 @@ SRC_URI += "file://0004-msm-ais-v4l2_v2-Introduce-dmabuf-import-support.patch;pa
 SRC_URI += "file://enable_qcom_scm_qcpe_hos.cfg"
 SRC_URI += "file://enable_qti_tz_log.cfg"
 SRC_URI += "file://enable_system_listener_qcpe_hos.cfg"
+SRC_URI += "file://enable_vivid.cfg"
 
 #--------------------------------------------------------------------------------------------
 # Below are workarounds needed for out-of-tree patches for V4L2loopback to be applied
