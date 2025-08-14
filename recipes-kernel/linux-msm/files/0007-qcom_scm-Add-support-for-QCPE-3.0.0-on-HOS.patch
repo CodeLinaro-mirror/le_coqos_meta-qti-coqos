@@ -1,0 +1,570 @@
+From 4c15e9a79ea9ddf9905600fe92c31a05fb99905c Mon Sep 17 00:00:00 2001
+From: Przemyslaw Marczak <mprzemys@qti.qualcomm.com>
+Date: Mon, 11 Aug 2025 11:40:23 +0200
+Subject: [PATCH 07/11] qcom_scm: Add support for QCPE 3.0.0 on HOS.
+
+Starting with coqoshv-ext-qcpe-service v3.0.0 the SMC has been implemented
+with channel based communication. The major change introduced in this release
+is the SMC synchronous exception handling.
+
+The existing solution was based on COQOSHV QCPE Unikraft port that enabled
+COQOSHV SEF (Synchronous Exception Forwarding) feature to forward SMC calls
+from COQOSHV Guest VM to QCPE VM.
+This solution was transparent from virtualization point of view. The drawback
+of this solution was the VCPU getting blocked during the SMC call because
+it was not scheduled by the hypervisor until SMC return.
+
+A new design called "Channel based SMC" was developed that utilizes COQOSHV
+channels, shared memory and interrupts to efficiently handle the SMC calls
+from Guest VMs.
+Instead of the SMC call, the HVC instruction now triggers the communication
+with QCPE and the response is signalled with an interrupt. The difference
+is that HVC is used only to signal and does not block the Guest vCPU.
+
+This solution improves the IRQ handling in the Guest VM during the 'SMC' calls.
+Previously it was impacted by the VCPU being blocked.
+
+The new design is comparable to QTI's HAB implementation from performance
+point of view.
+
+This commit adds the necessary support in the SCM driver.
+
+Changes:
+
+* New module: qcom_scm-coqoshv
+* Module initialization triggered at first SMC call
+* Optionally allows simultaneous non-atomic SMC calls
+
+New kernel config items:
+
+* CONFIG_QCOM_SCM_QCPE_HOS:
+  Enable Channel based SMC in SCM driver
+* CONFIG_QCOM_SCM_LOCK_DISABLE:
+  Bypass SMC call mutex protection and allows execute
+  simultaneus non-atomic SMC calls
+
+Signed-off-by: Przemyslaw Marczak <mprzemys@qti.qualcomm.com>
+---
+ drivers/firmware/Kconfig            |  17 ++
+ drivers/firmware/Makefile           |   1 +
+ drivers/firmware/qcom_scm-coqoshv.c | 371 ++++++++++++++++++++++++++++
+ drivers/firmware/qcom_scm-coqoshv.h |  15 ++
+ drivers/firmware/qcom_scm-smc.c     |  19 +-
+ 5 files changed, 422 insertions(+), 1 deletion(-)
+ create mode 100644 drivers/firmware/qcom_scm-coqoshv.c
+ create mode 100644 drivers/firmware/qcom_scm-coqoshv.h
+
+diff --git a/drivers/firmware/Kconfig b/drivers/firmware/Kconfig
+index 877704b06..55b11cb83 100644
+--- a/drivers/firmware/Kconfig
++++ b/drivers/firmware/Kconfig
+@@ -278,6 +278,23 @@ config QCOM_SCM_QCPE
+ 	  environment). The SCM channel will use QCOM HAB interface for
+ 	  front-end to back-end communication.
+ 
++config QCOM_SCM_QCPE_HOS
++	bool "Para-Virtualized Secure Channel Manager (SCM) support over QCPE (HOS)"
++	depends on QCOM_SCM
++	default n
++	help
++	  To enable Secure Channel Mananger(SCM) support for SoC
++	  in virtualized Linux, where SCM backend is QCPE (QCOM Protected
++	  environment).
++
++config QCOM_SCM_LOCK_DISABLE
++	bool "Disable SCM lock mechanism to allow simultaneous SMC calls over QCPE (HOS)"
++	depends on QCOM_SCM && QCOM_SCM_QCPE_HOS
++	default n
++	help
++	  To disable the Secure Channel Mananger (SCM) SMC call lock mechanism.
++	  Disabling the lock allows execute simultaneous SMC calls within single guest VM.
++
+ config QTEE_SHM_BRIDGE
+ 	bool "QTI TEE shared memory bridge"
+ 	depends on QCOM_SCM
+diff --git a/drivers/firmware/Makefile b/drivers/firmware/Makefile
+index af9515c8e..971c45d20 100644
+--- a/drivers/firmware/Makefile
++++ b/drivers/firmware/Makefile
+@@ -20,6 +20,7 @@ obj-$(CONFIG_FW_CFG_SYSFS)	+= qemu_fw_cfg.o
+ obj-$(CONFIG_QCOM_SCM)		+= _qcom_scm.o
+ _qcom_scm-y			+= qcom_scm.o qcom_scm-smc.o
+ _qcom_scm-$(CONFIG_QTEE_SHM_BRIDGE)	+= qtee_shmbridge.o
++obj-$(CONFIG_QCOM_SCM_QCPE_HOS) += qcom_scm-coqoshv.o
+ obj-$(CONFIG_TI_SCI_PROTOCOL)	+= ti_sci.o
+ obj-$(CONFIG_TRUSTED_FOUNDATIONS) += trusted_foundations.o
+ obj-$(CONFIG_TURRIS_MOX_RWTM)	+= turris-mox-rwtm.o
+diff --git a/drivers/firmware/qcom_scm-coqoshv.c b/drivers/firmware/qcom_scm-coqoshv.c
+new file mode 100644
+index 000000000..24883ad01
+--- /dev/null
++++ b/drivers/firmware/qcom_scm-coqoshv.c
+@@ -0,0 +1,371 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
++ *
++ */
++
++#include <linux/io.h>
++#include <linux/interrupt.h>
++#include <linux/errno.h>
++#include <linux/delay.h>
++#include <linux/kernel.h>
++#include <linux/mutex.h>
++#include <linux/semaphore.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/of_irq.h>
++#include <linux/slab.h>
++#include <linux/types.h>
++#include <linux/qcom_scm.h>
++#include <linux/arm-smccc.h>
++#include <linux/dma-mapping.h>
++
++#include <soc/qcom/qseecom_scm.h>
++#include <soc/qcom/qseecomi.h>
++
++#include "qcom_scm.h"
++#include "qcom_scm-coqoshv.h"
++
++#ifdef pr_fmt
++#undef pr_fmt
++#endif
++#define pr_fmt(fmt)  "qcom_scm-coqoshv: " fmt
++
++/* "coqoshv/smc" */
++#define COQOSHV_SMC_MAGIC   0x636d732f79737070ul
++#define COQOSHV_SMC_MAX 54
++
++/* HVC trigger capability (e.g. interrupt injection) */
++#define HVC_P_TRIGGER_CAP 0x1
++
++/* 16 byte */
++struct coqoshv_smc_header {
++        __u64 magic;
++        __u16 mailboxes;
++        __u16 boxsize;
++        __u16 offset_mheader;
++        __u16 offset_mailbox;
++} __packed;
++
++/* 32bits in case guest is 32bit -> only 32bit atomics */
++struct coqoshv_smc_mailbox_header {
++        __u32 req_id;
++        __u32 res_id;
++} __packed;
++
++/* short reference to all relevant parts */
++struct coqoshv_smc_desc {
++        struct coqoshv_smc_header         *bheader;
++        struct coqoshv_smc_mailbox_header *mheader;
++        struct coqoshv_smc_mailbox        *mailbox;
++};
++
++struct coqoshv_notification {
++	__u32 id;
++	struct semaphore sem;
++};
++
++static struct coqoshv_notification coqoshv_notification[COQOSHV_SMC_MAX];
++
++DEFINE_SEMAPHORE(coqoshv_buffer_semaphore);
++
++static int coqoshv_initialized = 0;
++static unsigned int coqoshv_sender_local_id = 0;
++static uintptr_t coqoshv_qcpe_pshm = 0;
++static u64       coqoshv_qcpe_pshm_size = 0;
++static void*     coqoshv_qcpe_vshm = NULL;
++static struct coqoshv_smc_desc coqoshv_buffer;
++static unsigned long coqoshv_mailbox_alloc = 0;
++static unsigned long coqoshv_mailbox_max = 0;
++static unsigned long coqoshv_mailbox_notified = ~0ul;
++
++static int coqoshv_init_qcpe(void);
++
++static void coqoshv_notify_mailboxes()
++{
++	__u32 shmem_res_id, local_res_id;
++	int i;
++
++	mb();
++	for (i = 0; i < coqoshv_mailbox_max; ++i) {
++		shmem_res_id = READ_ONCE(coqoshv_buffer.mheader[i].res_id);
++		local_res_id = READ_ONCE(coqoshv_notification[i].id);
++		if (local_res_id != shmem_res_id)
++			continue;
++
++		/* make sure only one caller of this function updates the id and
++		 * and signals the semaphore
++		 */
++		if (!test_and_set_bit_lock(i, &coqoshv_mailbox_notified)) {
++			WRITE_ONCE(coqoshv_notification[i].id, local_res_id + 1);
++			mb();
++			up(&coqoshv_notification[i].sem);
++		}
++	}
++}
++
++static irqreturn_t coqoshv_irq_handler(int irq, void *args)
++{
++	mb();
++	if (READ_ONCE(coqoshv_mailbox_notified) != ~0ul)
++		coqoshv_notify_mailboxes();
++
++	return IRQ_HANDLED;
++}
++
++inline static unsigned coqoshv_acquire_mailbox()
++{
++	/* fast path: try to allocate first mailbox
++	 * since this allocator is protected by a semaphore,
++	 * not a lot of contention is expected
++	 */
++	unsigned desired = 0;
++
++	while (test_and_set_bit_lock(desired, &coqoshv_mailbox_alloc)) {
++		desired = (desired + 1) % coqoshv_mailbox_max;
++		cpu_relax();
++	}
++
++	return desired;
++}
++
++inline static void coqoshv_release_mailbox(unsigned mailbox)
++{
++	clear_bit_unlock(mailbox, &coqoshv_mailbox_alloc);
++}
++
++inline static void coqoshv_wait_sem(struct semaphore *sem,
++				    const bool atomic)
++{
++	if (!atomic) {
++		down(sem);
++	} else	{
++		/* Can not sleep in semaphore in atomic context,
++		 * but need to wait for response.
++		 * Returns 1 if cannot be acquired.
++		 */
++		while (down_trylock(sem))
++			cpu_relax();
++	}
++}
++
++static void coqoshv_send_smc(__u32 mbox_id, struct arm_smccc_res *res)
++{
++	clear_bit_unlock(mbox_id, &coqoshv_mailbox_notified);
++	arm_smccc_hvc(HVC_P_TRIGGER_CAP,
++		      coqoshv_sender_local_id, 0, 0, 0, 0, 0, 0, res);
++	down(&coqoshv_notification[mbox_id].sem);
++}
++
++static void coqoshv_send_smc_atomic(__u32 mbox_id, struct arm_smccc_res *res)
++{
++	__u32 local_res_id = READ_ONCE(coqoshv_notification[mbox_id].id);
++	__u32 shmem_res_id;
++
++	arm_smccc_hvc(HVC_P_TRIGGER_CAP,
++		      coqoshv_sender_local_id, 0, 0, 0, 0, 0, 0, res);
++
++	do {
++		cpu_relax();
++		mb();
++		shmem_res_id = READ_ONCE(coqoshv_buffer.mheader[mbox_id].res_id);
++	} while (local_res_id != shmem_res_id);
++
++	WRITE_ONCE(coqoshv_notification[mbox_id].id, local_res_id + 1);
++}
++
++void coqoshv_call_qcpe(const struct coqoshv_smc_mailbox *smc,
++		       struct arm_smccc_res *res,
++		       const bool atomic)
++{
++	struct coqoshv_smc_mailbox *shmem;
++	__u32 msg_id;
++	__u32 mbox_id;
++
++	coqoshv_wait_sem(&coqoshv_buffer_semaphore, atomic);
++
++	if (unlikely(!coqoshv_initialized))
++		coqoshv_init_qcpe();
++
++	mbox_id = coqoshv_acquire_mailbox();
++	msg_id = READ_ONCE(coqoshv_buffer.mheader[mbox_id].req_id) + 1;
++	shmem = &coqoshv_buffer.mailbox[mbox_id];
++	memcpy(shmem, smc, sizeof(struct coqoshv_smc_mailbox));
++	WRITE_ONCE(coqoshv_buffer.mheader[mbox_id].req_id, msg_id);
++	mb();
++
++	pr_debug("x0: %lx, x1: 0x%lx, x2: 0x%lx, x3: 0x%lx, "
++		 "x4: %lx, x5: 0x%lx, x6: 0x%lx, x7: 0x%lx\n",
++		 shmem->args[0], shmem->args[1], shmem->args[2], shmem->args[3],
++		 shmem->args[4], shmem->args[5], shmem->args[6], shmem->args[7]);
++
++	do {
++		if (!atomic)
++			coqoshv_send_smc(mbox_id, res);
++		else
++			coqoshv_send_smc_atomic(mbox_id, res);
++
++		mb();
++		/* the signal might have been triggered again
++		 * during the interrupt handler that woke us up,
++		 * so check all the mailboxes if there are waiters
++		 */
++		if (unlikely(READ_ONCE(coqoshv_mailbox_notified) != ~0ul))
++			coqoshv_notify_mailboxes();
++	} while (shmem->args[0] == QCOM_SCM_INTERRUPTED);
++
++	pr_debug("x0: %lx, x1: 0x%lx, x2: 0x%lx, x3: 0x%lx, "
++		 "x4: %lx, x5: 0x%lx, x6: 0x%lx, x7: 0x%lx\n",
++		 shmem->args[0], shmem->args[1], shmem->args[2], shmem->args[3],
++		 shmem->args[4], shmem->args[5], shmem->args[6], shmem->args[7]);
++
++	memcpy(res, shmem, sizeof(struct arm_smccc_res));
++
++	coqoshv_release_mailbox(mbox_id);
++	up(&coqoshv_buffer_semaphore);
++}
++
++static int coqoshv_platform_init(void)
++{
++	int mbox_id;
++	int ret, virq;
++	struct device_node *node;
++	struct resource resource, *res = NULL;
++	const char *compat = "coqoshv,smc-chan";
++	u8 *addr;
++
++#if IS_ENABLED(CONFIG_QCOM_SCM_LOCK_DISABLE)
++	pr_info("qcom_scm_lock disabled\n");
++#else
++	pr_info("qcom_scm_lock enabled\n");
++#endif
++	node = of_find_compatible_node(NULL, NULL, compat);
++	if (!node) {
++		pr_err("Could not find %s node\n", compat);
++		return -EINVAL;
++	}
++
++	if (of_property_read_u32(node, "sender-local-id",
++				 &coqoshv_sender_local_id)) {
++		pr_err("Could not parse \"sender-local-id\"\n" );
++		return -EINVAL;
++	}
++
++	virq = irq_of_parse_and_map(node, 0);
++	if (virq <= 0) {
++		pr_err("irq_of_parse_and_map failed\n");
++		return -EINVAL;
++	}
++
++	if (request_irq(virq, coqoshv_irq_handler, 0, "coqoshv_smc", NULL)) {
++		pr_err("Could not request irq\n");
++		return -ENODEV;
++	}
++
++	if (of_address_to_resource(node, 0, &resource)) {
++		pr_err("Could not get resource from \"reg\" property\n");
++		ret = -EINVAL;
++		goto error_of_address;
++	}
++
++	coqoshv_qcpe_pshm = resource.start;
++	coqoshv_qcpe_pshm_size = resource_size(&resource);
++
++	res = request_mem_region(coqoshv_qcpe_pshm,
++				 coqoshv_qcpe_pshm_size, "coqoshv-qcpe");
++	if (!res) {
++		pr_err("Could not request region\n");
++		ret = -ENODEV;
++		goto error_request_mem;
++	}
++
++	coqoshv_qcpe_vshm = memremap(coqoshv_qcpe_pshm,
++				     coqoshv_qcpe_pshm_size, MEMREMAP_WB);
++	if (!coqoshv_qcpe_vshm) {
++		pr_err("Could not map mem region\n");
++		ret = -EINVAL;
++		goto error_memremap;
++	}
++
++	coqoshv_buffer.bheader = coqoshv_qcpe_vshm;
++
++	addr = (u8 *) coqoshv_qcpe_vshm +
++		READ_ONCE(coqoshv_buffer.bheader->offset_mheader);
++
++	if (addr + sizeof(struct coqoshv_smc_mailbox_header) >
++	    (u8 *)coqoshv_qcpe_vshm + coqoshv_qcpe_pshm_size) {
++		pr_err("Mailbox header offset out of shm range");
++		goto error_io;
++	}
++
++	coqoshv_buffer.mheader = (struct coqoshv_smc_mailbox_header *) addr;
++
++	addr = (u8 *) coqoshv_qcpe_vshm +
++		 READ_ONCE(coqoshv_buffer.bheader->offset_mailbox);
++
++	if (addr + sizeof(struct coqoshv_smc_mailbox) >
++	    (u8 *)coqoshv_qcpe_vshm + coqoshv_qcpe_pshm_size) {
++		pr_err("SMC mailbox offset out of shm range");
++		goto error_io;
++	}
++
++	coqoshv_buffer.mailbox = (struct coqoshv_smc_mailbox *) addr;
++
++	if (unlikely(READ_ONCE(coqoshv_buffer.bheader->magic) !=
++	    COQOSHV_SMC_MAGIC)) {
++		pr_err("Invalid header in SMC message buffer");
++		goto error_io;
++	}
++
++	if (unlikely(READ_ONCE(coqoshv_buffer.bheader->boxsize) != 64)) {
++		pr_err("Invalid mailbox size for SMC message buffer");
++		goto error_io;
++	}
++
++	coqoshv_mailbox_alloc = 0;
++
++	/* minimum of: length of array == COQOSHV_SMC_MAX and
++	 *              number of mailboxes from the header
++         */
++	coqoshv_mailbox_max = READ_ONCE(coqoshv_buffer.bheader->mailboxes);
++	coqoshv_mailbox_max = min(coqoshv_mailbox_max,
++				  (unsigned long) COQOSHV_SMC_MAX);
++	if (unlikely(!coqoshv_mailbox_max)) {
++		pr_err("Zero mailboxes for SMC message buffer");
++		goto error_io;
++	}
++
++	for (mbox_id = 0; mbox_id < coqoshv_mailbox_max; ++mbox_id) {
++		sema_init(&coqoshv_notification[mbox_id].sem, 0);
++		coqoshv_notification[mbox_id].id = 1;
++	}
++
++	pr_info("Initialized\n");
++
++	coqoshv_initialized = 1;
++
++	/* semaphore is initialized to 1, increase to coqoshv_mailbox_max */
++	for (mbox_id = 1; mbox_id < coqoshv_mailbox_max; ++mbox_id) {
++		up(&coqoshv_buffer_semaphore);
++	}
++
++	return 0;
++
++error_io:
++	ret = -EIO;
++	memunmap(coqoshv_qcpe_vshm);
++error_memremap:
++	release_mem_region(coqoshv_qcpe_pshm, coqoshv_qcpe_pshm_size);
++error_request_mem:
++error_of_address:
++	free_irq(virq, NULL);
++	return ret;
++}
++
++static int coqoshv_init_qcpe(void)
++{
++	if (coqoshv_platform_init())
++		panic("Could not initialize.\n");
++
++	return 0;
++}
+diff --git a/drivers/firmware/qcom_scm-coqoshv.h b/drivers/firmware/qcom_scm-coqoshv.h
+new file mode 100644
+index 000000000..a124ac1bc
+--- /dev/null
++++ b/drivers/firmware/qcom_scm-coqoshv.h
+@@ -0,0 +1,15 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
++ *
++ */
++
++#define COQOSHV_SMC_ARGS_NUM 8
++
++/* 64 byte */
++struct coqoshv_smc_mailbox {
++        __u64 args[COQOSHV_SMC_ARGS_NUM];
++} __packed;
++
++void coqoshv_call_qcpe(const struct coqoshv_smc_mailbox *smc,
++		       struct arm_smccc_res *res, const bool atomic);
+diff --git a/drivers/firmware/qcom_scm-smc.c b/drivers/firmware/qcom_scm-smc.c
+index 4bfbfd7d1..c443862d9 100644
+--- a/drivers/firmware/qcom_scm-smc.c
++++ b/drivers/firmware/qcom_scm-smc.c
+@@ -19,6 +19,9 @@
+ #include <soc/qcom/qseecomi.h>
+ 
+ #include "qcom_scm.h"
++#if IS_ENABLED(CONFIG_QCOM_SCM_QCPE_HOS)
++#include "qcom_scm-coqoshv.h"
++#endif
+ 
+ #define CREATE_TRACE_POINTS
+ #include <trace/events/scm.h>
+@@ -764,7 +767,7 @@ static void __qcom_scm_call_do_quirk(const struct arm_smccc_args *smc,
+ {
+ 	ktime_t time;
+ 	const bool trace = trace_scm_call_enabled();
+-#if !(IS_ENABLED(CONFIG_QCOM_SCM_QCPE))
++#if !(IS_ENABLED(CONFIG_QCOM_SCM_QCPE)) && !(IS_ENABLED(CONFIG_QCOM_SCM_QCPE_HOS))
+ 	unsigned long a0 = smc->a[0];
+ 	struct arm_smccc_quirk quirk = { .id = ARM_SMCCC_QUIRK_QCOM_A6 };
+ 
+@@ -775,6 +778,9 @@ static void __qcom_scm_call_do_quirk(const struct arm_smccc_args *smc,
+ 
+ #if IS_ENABLED(CONFIG_QCOM_SCM_QCPE)
+ 	scm_call_qcpe(smc, res, atomic);
++#else
++#if IS_ENABLED(CONFIG_QCOM_SCM_QCPE_HOS)
++	coqoshv_call_qcpe((const struct coqoshv_smc_mailbox *)smc, res, atomic);
+ #else
+ 	do {
+ 		arm_smccc_smc_quirk(a0, smc->a[1], smc->a[2], smc->a[3],
+@@ -785,6 +791,7 @@ static void __qcom_scm_call_do_quirk(const struct arm_smccc_args *smc,
+ 			a0 = res->a0;
+ 
+ 	} while (res->a0 == QCOM_SCM_INTERRUPTED);
++#endif /* CONFIG_QCOM_SCM_QCPE_HOS */
+ #endif
+ 	if (trace)
+ 		trace_scm_call(smc->a, res, ktime_us_delta(ktime_get(), time));
+@@ -869,9 +876,13 @@ static int qcom_scm_call_smccc(struct device *dev,
+ 		int retry_count = 0;
+ 
+ 		do {
++#if IS_ENABLED(CONFIG_QCOM_SCM_LOCK_DISABLE)
++			__qcom_scm_call_do_quirk(&smc, &res, false);
++#else
+ 			mutex_lock(&qcom_scm_lock);
+ 			__qcom_scm_call_do_quirk(&smc, &res, false);
+ 			mutex_unlock(&qcom_scm_lock);
++#endif
+ 
+ 			if (res.a0 == QCOM_SCM_V2_EBUSY) {
+ 				if (retry_count++ > QCOM_SCM_EBUSY_MAX_RETRY ||
+@@ -1014,11 +1025,17 @@ static int qcom_scm_call_legacy(struct device *dev, struct qcom_scm_desc *desc)
+ 	smc.a[1] = (unsigned long)&context_id;
+ 	smc.a[2] = cmd_phys;
+ 
++#if IS_ENABLED(CONFIG_QCOM_SCM_LOCK_DISABLE)
++	__qcom_scm_call_do(&smc, &res);
++	if (res.a0 < 0)
++		ret = qcom_scm_remap_error(res.a0);
++#else
+ 	mutex_lock(&qcom_scm_lock);
+ 	__qcom_scm_call_do(&smc, &res);
+ 	if (res.a0 < 0)
+ 		ret = qcom_scm_remap_error(res.a0);
+ 	mutex_unlock(&qcom_scm_lock);
++#endif
+ 	if (ret)
+ 		goto out;
+ 
+-- 
+2.49.0
+
