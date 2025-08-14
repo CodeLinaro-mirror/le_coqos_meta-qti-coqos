@@ -27,6 +27,7 @@ SRC_URI += "file://0004-msm-ais-v4l2_v2-Introduce-dmabuf-import-support.patch;pa
 SRC_URI += "file://disable_kernel_unmap.cfg"
 SRC_URI += "file://disable_module_sig.cfg"
 SRC_URI += "file://enable_coresight-tmc.cfg"
+SRC_URI += "file://enable_cpufreq_default_gov_perf.cfg"
 SRC_URI += "file://enable_qcom_scm_qcpe_hos.cfg"
 SRC_URI += "file://enable_qti_tz_log.cfg"
 SRC_URI += "file://enable_st_asm330lhh_modules.cfg"
