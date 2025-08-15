@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) 2025 Qualcomm Technologies, Inc. All rights reserved.
+ */
+
+/* EDK2 added properties */
+/ {
+	qcom,pmic-name = "PM8150";
+
+	memory {
+		reg = <0x0 0x0 0x0 0x0>;
+		ddr_device_type = <0x7>;
+		device_type = "memory";
+	};
+
+	chosen {
+		kaslr-seed = <0x0 0x0>;
+	};
+};
