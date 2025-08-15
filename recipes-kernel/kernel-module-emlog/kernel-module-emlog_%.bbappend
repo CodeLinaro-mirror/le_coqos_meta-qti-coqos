@@ -11,6 +11,10 @@ SRC_URI += " \
 KERNEL_CC = "${CC} -fuse-ld=bfd"
 
 EXTRA_OEMAKE += "KDIR='${STAGING_KERNEL_DIR}'"
+# disable debug_info to avoid error from QTI internal
+# binary-symbols-checker.bbclass
+EXTRA_OEMAKE += "KBUILD_CFLAGS_MODULE+=-g0"
+
 MAKE_TARGETS = "all"
 
 KERNEL_MODULE_AUTOLOAD += "emlog"
@@ -26,6 +30,6 @@ do_install:append() {
 }
 
 FILES:${PN} += " \
-    /lib/modules/${KERNEL_VERSION}/extra/emlog.ko \
+    ${libdir}/modules/${KERNEL_VERSION}/extra/emlog.ko \
     /etc/udev/rules.d/emlog.rules \
 "
