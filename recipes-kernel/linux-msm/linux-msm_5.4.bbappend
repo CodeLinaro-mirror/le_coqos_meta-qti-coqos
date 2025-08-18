@@ -35,6 +35,7 @@ SRC_URI += "file://enable_st_asm330lhh_modules.cfg"
 SRC_URI += "file://enable_system_listener_qcpe_hos.cfg"
 SRC_URI += "file://enable_vhost_vsock.cfg"
 SRC_URI += "file://enable_vivid.cfg"
+SRC_URI += "file://set_adreno_governor_performance.cfg"
 
 #--------------------------------------------------------------------------------------------
 # Below are workarounds needed for out-of-tree patches for V4L2loopback to be applied
