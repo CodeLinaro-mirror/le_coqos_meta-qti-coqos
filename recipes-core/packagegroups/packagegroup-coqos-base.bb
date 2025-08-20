@@ -4,8 +4,9 @@ inherit packagegroup
 
 PACKAGES = "packagegroup-coqos-base"
 
-# COQOS Trace
+# COQOS Trace and device-tree
 RDEPENDS:${PN} += "\
+    device-tree \
     trace-emlog \
     "
 
