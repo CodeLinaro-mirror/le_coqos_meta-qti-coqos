@@ -1,0 +1,91 @@
+# This patch file is from Qualcomm Technologies, Inc. and is provided under the following license:
+#
+# Copyright (c) 2025 Qualcomm Technologies, Inc. All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+commit: 74866be8914096c735faf09e149893f079792862
+Author: Ankurkumar Satasiya <asatasiy@qti.qualcomm.com>
+Date:   Sat Apr 5 07:40:34 2025 +0200
+
+edk2: Update DevInfo struct to share it between native and guest bootloaders.
+
+Add additional fields like android_rollback_index and android_verity_mode to
+distinguish them from native bootloader as the devinfo partition is
+shared between native and guest bootloaders. DevInfo structure is stored
+in devinfo partition if device is in unlocked state, otherwise in RPMB.
+These added fields must not be used by the native bootloader.
+
+Signed-off-by: Ankurkumar Satasiya <asatasiy@qti.qualcomm.com>
+
+diff --git a/QcomModulePkg/Include/Library/DeviceInfo.h b/QcomModulePkg/Include/Library/DeviceInfo.h
+index 430b6e6..444d01a 100644
+--- a/QcomModulePkg/Include/Library/DeviceInfo.h
++++ b/QcomModulePkg/Include/Library/DeviceInfo.h
+@@ -38,12 +38,25 @@
+ #define MAX_VERSION_LEN 64
+ #define MAX_VB_PARTITIONS 32
+ #define MAX_USER_KEY_SIZE 2048
++#define MAX_ENTRY_SIZE    8
++#define MAX_NAME_SIZE     56
++#define MAX_VALUE_SIZE    32
++#define MAX_AUDIO_FW_LENGTH 16
++#define DICE_HIDDEN_SIZE 32
+ 
+ enum unlock_type {
+   UNLOCK = 0,
+   UNLOCK_CRITICAL,
+ };
+ 
++typedef struct {
++  UINT16  in_use;
++  UINT16  name_size;
++  UINT16  value_size;
++  UINT8   name[MAX_NAME_SIZE];
++  UINT8   value[MAX_VALUE_SIZE];
++} persistent_value_type;
++
+ typedef struct device_info {
+   CHAR8 magic[DEVICE_MAGIC_SIZE];
+   BOOLEAN is_unlocked;
+@@ -57,6 +70,19 @@ typedef struct device_info {
+   UINT64 rollback_index[MAX_VB_PARTITIONS];
+   struct usb_composition usb_comp;
+   UINTN golden_snapshot;
++
++  /*
++   * Below fields should not be used by native bootloader as
++   * they are meant to be used only by guest bootloader.
++   */
++  BOOLEAN android_verity_mode; // TRUE = enforcing, FALSE = logging
++  UINT64 android_rollback_index[MAX_VB_PARTITIONS];
++  persistent_value_type persistent_value[MAX_ENTRY_SIZE];
++  CHAR8 AudioFramework[MAX_AUDIO_FW_LENGTH];
++  UINT8 FdrFlag;
++  UINT32 FrsSecLen; /*Holds length of FRS secret*/
++  UINT8 FrsSec[DICE_HIDDEN_SIZE]; /*Holds plain secret*/
++
+ } DeviceInfo;
+ 
+ struct verified_boot_verity_mode {
+diff --git a/QcomModulePkg/Library/BootLib/DeviceInfo.c b/QcomModulePkg/Library/BootLib/DeviceInfo.c
+index 1ce9af9..1ab7628 100644
+--- a/QcomModulePkg/Library/BootLib/DeviceInfo.c
++++ b/QcomModulePkg/Library/BootLib/DeviceInfo.c
+@@ -259,6 +259,8 @@ EFI_STATUS DeviceInfoInit (VOID)
+     gBS->CopyMem (DevInfo.magic, DEVICE_MAGIC, DEVICE_MAGIC_SIZE);
+     DevInfo.user_public_key_length = 0;
+     gBS->SetMem (DevInfo.rollback_index, sizeof (DevInfo.rollback_index), 0);
++    gBS->SetMem (DevInfo.android_rollback_index, sizeof (DevInfo.android_rollback_index), 0);
++    gBS->SetMem (DevInfo.persistent_value, sizeof (DevInfo.persistent_value), 0);
+     gBS->SetMem (DevInfo.user_public_key, sizeof (DevInfo.user_public_key), 0);
+     if (IsSecureBootEnabled ()) {
+       DevInfo.is_unlocked = FALSE;
+@@ -269,6 +271,7 @@ EFI_STATUS DeviceInfoInit (VOID)
+     }
+     DevInfo.is_charger_screen_enabled = FALSE;
+     DevInfo.verity_mode = TRUE;
++    DevInfo.android_verity_mode = TRUE;
+     Status =
+         ReadWriteDeviceInfo (WRITE_CONFIG, (VOID *)&DevInfo, sizeof (DevInfo));
+     if (Status != EFI_SUCCESS) {

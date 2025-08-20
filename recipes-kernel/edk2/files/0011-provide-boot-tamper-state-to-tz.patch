@@ -1,0 +1,117 @@
+# This patch file is from Qualcomm Technologies, Inc. and is provided under the following license:
+#
+# Copyright (c) 2025 Qualcomm Technologies, Inc. All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+commit 7cc055dcb4fd7ca604ebe2ce7fc1199c4535bd48
+Author: Ankurkumar Satasiya <asatasiy@qti.qualcomm.com>
+Date:   Tue May 20 17:12:06 2025 +0200
+
+    Provide boot tamper state to TZ if the boot state is ORANGE.
+    
+    Boot state results in ORANGE if device state is unlocked.
+
+Signed-off-by: Ankurkumar Satasiya <asatasiy@qti.qualcomm.com>
+diff --git a/QcomModulePkg/Library/avb/KeymasterClient.c b/QcomModulePkg/Library/avb/KeymasterClient.c
+index 58f8c18..2b1aba6 100644
+--- a/QcomModulePkg/Library/avb/KeymasterClient.c
++++ b/QcomModulePkg/Library/avb/KeymasterClient.c
+@@ -201,6 +201,33 @@ KeyMasterStartApp (KMHandle *Handle)
+   return Status;
+ }
+ 
++EFI_STATUS
++SetBootTamperState(boot_state_t Color)
++{
++  EFI_STATUS Status     = EFI_SUCCESS;
++  BOOLEAN secure_device = FALSE;
++
++  /* Provide boot tamper state to TZ */
++  if (((Status = IsSecureDevice (&secure_device)) == EFI_SUCCESS) &&
++      secure_device && (Color != GREEN)) {
++    if (AllowSetFuse ()) {
++      Status = SetFuse (TZ_HLOS_IMG_TAMPER_FUSE);
++      if (Status != EFI_SUCCESS) {
++        DEBUG ((EFI_D_ERROR, "KeyMasterSetRotAndBootState: "
++                             "SetFuse (TZ_HLOS_IMG_TAMPER_FUSE) fails!\n"));
++        return Status;
++      }
++      Status = SetFuse (TZ_HLOS_TAMPER_NOTIFY_FUSE);
++      if (Status != EFI_SUCCESS) {
++        DEBUG ((EFI_D_ERROR, "KeyMasterSetRotAndBootState: "
++                             "SetFuse (TZ_HLOS_TAMPER_NOTIFY_FUSE) fails!\n"));
++        return Status;
++      }
++    }
++  }
++  return Status;
++}
++
+ EFI_STATUS
+ KeyMasterSetRotAndBootState (KMRotAndBootState *BootState)
+ {
+@@ -215,7 +242,6 @@ KeyMasterSetRotAndBootState (KMRotAndBootState *BootState)
+   KMSetRotRsp RotRsp = {0};
+   KMSetBootStateReq BootStateReq = {0};
+   KMSetBootStateRsp BootStateRsp = {0};
+-  BOOLEAN secure_device = FALSE;
+ 
+   if (BootState == NULL) {
+     DEBUG ((EFI_D_ERROR, "Invalid parameter BootState\n"));
+@@ -307,23 +333,11 @@ KeyMasterSetRotAndBootState (KMRotAndBootState *BootState)
+   }
+ 
+   /* Provide boot tamper state to TZ */
+-  if (((Status = IsSecureDevice (&secure_device)) == EFI_SUCCESS) &&
+-      secure_device && (BootState->Color != GREEN)) {
+-    if (AllowSetFuse ()) {
+-      Status = SetFuse (TZ_HLOS_IMG_TAMPER_FUSE);
+-      if (Status != EFI_SUCCESS) {
+-        DEBUG ((EFI_D_ERROR, "KeyMasterSetRotAndBootState: "
+-                             "SetFuse (TZ_HLOS_IMG_TAMPER_FUSE) fails!\n"));
+-        return Status;
+-      }
+-      Status = SetFuse (TZ_HLOS_TAMPER_NOTIFY_FUSE);
+-      if (Status != EFI_SUCCESS) {
+-        DEBUG ((EFI_D_ERROR, "KeyMasterSetRotAndBootState: "
+-                             "SetFuse (TZ_HLOS_TAMPER_NOTIFY_FUSE) fails!\n"));
+-        return Status;
+-      }
+-    }
++  Status = SetBootTamperState(BootState->Color);
++  if (Status != EFI_SUCCESS) {
++    return Status;
+   }
++
+   DEBUG ((EFI_D_VERBOSE, "KeyMasterSetRotAndBootState success\n"));
+   return Status;
+ }
+diff --git a/QcomModulePkg/Library/avb/KeymasterClient.h b/QcomModulePkg/Library/avb/KeymasterClient.h
+index a3e0a5c..a6a9ac4 100644
+--- a/QcomModulePkg/Library/avb/KeymasterClient.h
++++ b/QcomModulePkg/Library/avb/KeymasterClient.h
+@@ -41,6 +41,9 @@ typedef struct {
+   UINT32 SystemSecurityLevel;
+ } KMRotAndBootState;
+ 
++EFI_STATUS
++SetBootTamperState(boot_state_t Color);
++
+ EFI_STATUS
+ KeyMasterSetRotAndBootState (KMRotAndBootState *BootState);
+ 
+diff --git a/QcomModulePkg/Library/avb/VerifiedBoot.c b/QcomModulePkg/Library/avb/VerifiedBoot.c
+index 6477400..a3c9bf6 100644
+--- a/QcomModulePkg/Library/avb/VerifiedBoot.c
++++ b/QcomModulePkg/Library/avb/VerifiedBoot.c
+@@ -1082,6 +1082,9 @@ LoadImageAndAuthVB2 (BootInfo *Info, BOOLEAN HibernationResume)
+   /* bring up keymaster, needed for Android GVM */
+   GUARD (KeyMasterStart ());
+ 
++  /* Provide boot tamper state to TZ */
++  GUARD (SetBootTamperState(Info->BootState));
++
+ out:
+   if (Status != EFI_SUCCESS) {
+     if (SlotData != NULL) {

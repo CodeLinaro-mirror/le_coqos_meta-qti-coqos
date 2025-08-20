@@ -1,0 +1,183 @@
+# This patch file is from Qualcomm Technologies, Inc. and is provided under the following license:
+#
+# Copyright (c) 2025 Qualcomm Technologies, Inc. All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+From 0b491e78d5e051f0b284b789f3526b9f016534a3 Mon Sep 17 00:00:00 2001
+From: Rafal Skierkowski <rskierko@qti.qualcomm.com>
+Date: Fri, 23 Aug 2024 08:04:16 +0200
+Subject: [PATCH 1/2] Store device serial number in dedicated memory.
+
+Store device serial number in dedicated memory to be used later on by
+Android virtual bootloader.
+
+Signed-off-by: Ankurkumar Satasiya <asatasiy@qti.qualcomm.com>
+---
+ .../Include/Library/DeviceInfoVirt.h          | 27 +++++++
+ .../QcomModulePkg/Library/BootLib/BootLib.inf |  2 +
+ .../QcomModulePkg/Library/BootLib/BootLinux.c |  3 +
+ .../Library/BootLib/DeviceInfoVirt.c          | 70 +++++++++++++++++++
+ .../edk2/QcomModulePkg/QcomModulePkg.dec      |  1 +
+ 5 files changed, 103 insertions(+)
+ create mode 100644 bootloader/edk2/QcomModulePkg/Include/Library/DeviceInfoVirt.h
+ create mode 100644 bootloader/edk2/QcomModulePkg/Library/BootLib/DeviceInfoVirt.c
+
+diff --git a/bootloader/edk2/QcomModulePkg/Include/Library/DeviceInfoVirt.h b/bootloader/edk2/QcomModulePkg/Include/Library/DeviceInfoVirt.h
+new file mode 100644
+index 0000000..f17434f
+--- /dev/null
++++ b/QcomModulePkg/Include/Library/DeviceInfoVirt.h
+@@ -0,0 +1,25 @@
++/** @file DeviceInfoVirt.h
++*
++*  Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
++*
++*  SPDX-License-Identifier: BSD-3-Clause-Clear
++*
++**/
++
++#ifndef _DEVINFOVIRT_H_
++#define _DEVINFOVIRT_H_
++
++#include <Uefi.h>
++
++/** Store device info for virtual bootloadr.
++
++  @retval  EFI_SUCCES   On success
++  @retval  Other value  On serial number access problems
++
++--*/
++EFI_STATUS
++StoreDeviceInfoVirt (
++  VOID
++  );
++
++#endif
+diff --git a/bootloader/edk2/QcomModulePkg/Library/BootLib/BootLib.inf b/bootloader/edk2/QcomModulePkg/Library/BootLib/BootLib.inf
+index d711c16..5b855cf 100755
+--- a/QcomModulePkg/Library/BootLib/BootLib.inf
++++ b/QcomModulePkg/Library/BootLib/BootLib.inf
+@@ -72,6 +72,7 @@
+ 	NandMultiSlotBoot.c
+ 	IntegrityIMA.c
+ 	ThreadStack.c
++	DeviceInfoVirt.c
+ 
+ [Packages]
+ 	ArmPkg/ArmPkg.dec
+@@ -168,6 +169,7 @@
+ 	gQcomTokenSpaceGuid.EnableDisplayMenu
+ 	gQcomTokenSpaceGuid.KernelLoadAddress32
+ 	gQcomTokenSpaceGuid.EnableMdtpSupport
++	gQcomTokenSpaceGuid.PcdDeviceInfoVirtBaseAddress
+ 
+ [Depex]
+ 	TRUE
+diff --git a/bootloader/edk2/QcomModulePkg/Library/BootLib/BootLinux.c b/bootloader/edk2/QcomModulePkg/Library/BootLib/BootLinux.c
+index 65c2fc8..5ff15b5 100644
+--- a/QcomModulePkg/Library/BootLib/BootLinux.c
++++ b/QcomModulePkg/Library/BootLib/BootLinux.c
+@@ -31,6 +31,7 @@
+  */
+ 
+ #include <Library/DeviceInfo.h>
++#include <Library/DeviceInfoVirt.h>
+ #include <Library/DrawUI.h>
+ #include <Library/PartitionTableUpdate.h>
+ #include <Library/ShutdownServices.h>
+@@ -1003,6 +1004,8 @@ skip_FfbmStr:
+        return Status;
+   }
+ 
++  StoreDeviceInfoVirt();
++
+   FreeVerifiedBootResource (Info);
+ 
+   /* Free the boot logo blt buffer before starting kernel */
+diff --git a/bootloader/edk2/QcomModulePkg/Library/BootLib/DeviceInfoVirt.c b/bootloader/edk2/QcomModulePkg/Library/BootLib/DeviceInfoVirt.c
+new file mode 100644
+index 0000000..cb8c326
+--- /dev/null
++++ b/QcomModulePkg/Library/BootLib/DeviceInfoVirt.c
+@@ -0,0 +1,68 @@
++/** @file DeviceInfoVirt.c
++*
++*  Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
++*
++*  SPDX-License-Identifier: BSD-3-Clause-Clear
++*
++**/
++
++#include <Library/BaseLib.h>
++#include <Library/BaseMemoryLib.h>
++#include <Library/Board.h>
++#include <Library/DebugLib.h>
++#include <Library/DeviceInfo.h>
++#include <Library/PcdLib.h>
++
++#include "DeviceInfoVirt.h"
++
++#define DEVINF_MAGIC_STR   "_DEVINF_"
++#define DEVINF_MAGIC_SIZE  8
++#define SERIAL_NUM_SIZE    64
++
++#pragma pack (1)
++typedef struct DeviceInfoVirt {
++  CHAR8   Magic[DEVINF_MAGIC_SIZE];
++  UINT32  Reserved;
++  CHAR8   SerialNumber[SERIAL_NUM_SIZE];
++  UINT32  Crc;
++} DeviceInfoVirtT;
++#pragma pack ()
++
++/** Store device info for virtual bootloadr.
++
++  @retval  EFI_SUCCES   On success
++  @retval  Other value  On serial number access problems
++
++--*/
++EFI_STATUS
++StoreDeviceInfoVirt (
++  VOID
++  )
++{
++  EFI_STATUS       Status;
++  DeviceInfoVirtT  DevInf;
++  UINT64           DevInfAddress;
++
++  DevInfAddress = (UINT64)PcdGet64 (PcdDeviceInfoVirtBaseAddress);
++
++  ZeroMem (&DevInf, sizeof (DevInf));
++
++  AsciiStrnCpy (DevInf.Magic, DEVINF_MAGIC_STR, DEVINF_MAGIC_SIZE);
++
++  Status = BoardSerialNum (DevInf.SerialNumber, sizeof (DevInf.SerialNumber));
++
++  if (Status != EFI_SUCCESS) {
++    DEBUG ((EFI_D_ERROR, "Error: failed to read board serial num: %d\n", Status));
++    ZeroMem (DevInf.SerialNumber, sizeof (DevInf.SerialNumber));
++  }
++
++  Status = gBS->CalculateCrc32 (&DevInf, sizeof (DevInf) - sizeof (DevInf.Crc), &DevInf.Crc);
++  if (Status != EFI_SUCCESS) {
++    DEBUG ((EFI_D_ERROR, "Error: failed to calculate checksum: %d\n", Status));
++    return Status;
++  }
++
++  CopyMem ((DeviceInfoVirtT *)DevInfAddress, &DevInf, sizeof (DevInf));
++
++  return Status;
++}
+diff --git a/bootloader/edk2/QcomModulePkg/QcomModulePkg.dec b/bootloader/edk2/QcomModulePkg/QcomModulePkg.dec
+index 82356e9..2290b35 100755
+--- a/QcomModulePkg/QcomModulePkg.dec
++++ b/QcomModulePkg/QcomModulePkg.dec
+@@ -161,3 +161,4 @@
+   gQcomTokenSpaceGuid.AllowEio|FALSE|BOOLEAN|0x00015008
+   gQcomTokenSpaceGuid.EnableBatteryVoltageCheck|TRUE|BOOLEAN|0x00015009
+   gQcomTokenSpaceGuid.RamdiskEndAddress32|0x03C00000|UINT32|0x0001500A
++  gQcomTokenSpaceGuid.PcdDeviceInfoVirtBaseAddress|0x21ffff000|UINT64|0x0001500B
+-- 
+2.43.2
+
