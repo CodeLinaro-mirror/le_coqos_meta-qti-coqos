@@ -1,0 +1,31 @@
+From 900c30f5e7abcaa6ed597e77992c2798f38fe165 Mon Sep 17 00:00:00 2001
+From: Marcin Mozejko <mmozejko@qti.qualcomm.com>
+Date: Mon, 3 Mar 2025 09:50:30 +0100
+Subject: [PATCH 05/11] pinctrl-sm8150: Remove GPIO 124 from PDC wakeirq map.
+
+This is a workaround for an issue that GPIO 124 line
+is pulled down to zero and therefore it cannot trigger
+an ethernet PHY interrupt. That makes ethernet driver
+go into a wrong state and become non-functional.
+
+Signed-off-by: Marcin Mozejko <mmozejko@qti.qualcomm.com>
+---
+ drivers/pinctrl/qcom/pinctrl-sm8150.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/pinctrl/qcom/pinctrl-sm8150.c b/drivers/pinctrl/qcom/pinctrl-sm8150.c
+index 81cc6885c..bc02bba97 100644
+--- a/drivers/pinctrl/qcom/pinctrl-sm8150.c
++++ b/drivers/pinctrl/qcom/pinctrl-sm8150.c
+@@ -1525,7 +1525,7 @@ static const struct msm_gpio_wakeirq_map sm8150_pdc_map[] = {
+ 	{ 91, 70 }, { 93, 75 }, { 95, 72 }, { 96, 73 }, { 97, 74 },
+ 	{ 101, 40 }, { 103, 77 }, { 104, 78 }, { 108, 79 }, { 112, 80 },
+ 	{ 113, 81 }, { 114, 82 }, { 117, 85 }, { 118, 101 }, { 119, 87 },
+-	{ 120, 88 }, { 121, 89 }, { 122, 90 }, { 123, 91 }, { 124, 92 },
++	{ 120, 88 }, { 121, 89 }, { 122, 90 }, { 123, 91 },
+ 	{ 125, 93 }, { 129, 94 }, { 132, 105 }, { 133, 83 }, { 134, 36 },
+ 	{ 136, 97 }, { 142, 103 }, { 144, 115 }, { 147, 102 }, { 150, 107 },
+ 	{ 152, 108 }, { 153, 109 },
+-- 
+2.49.0
+
