@@ -1,0 +1,225 @@
+From 3e30631415b4b19277385b3301a746754a1a3e78 Mon Sep 17 00:00:00 2001
+From: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+Date: Mon, 11 Aug 2025 13:43:38 +0200
+Subject: [PATCH 4/4] msm: ais: v4l2_v2: Introduce dmabuf import support.
+
+Add support of importing dmabuf file descriptors from other drivers
+queued via VIDIOC_QBUF as V4L2_MEMORY_DMABUF memory type. This enables
+writting camera framebuffers by hardware directly to guest VM memory
+instead of copying from memory allocated upon VIDIOC_EXPBUF call from
+AIS.
+
+The buf importing flow can be summarized as following:
+1. App requests V4L2_MEMORY_DMABUF buf via VIDIOC_REQBUFS.
+2. App queues a new V4L2_MEMORY_DMABUF buf via VIDIOC_QBUF.
+2.a If the dmabuf wasn't imported by v4l2loopback client before:
+2.a.a. If there aren't enough buffers to import (qcarcam has minimum
+required amount of buffers depending on implementation), then the new
+dmabuf is added to array of dmabufs, but AIS doesn't get informed of
+the new buffer yet.
+2.a.b. If there are enough buffers queued, then v4l2loopback client
+triggers IS_V4L2_IMPORT_BUFS event and waits for v4l2loopback server
+side AIS_V4L2_OUTPUT_PRIV_GET_IMPORTED_BUFS ioctl. The ioctl provides
+all new an existing dmabuf fds that's been imported to AIS via qcarcam
+API.
+2.b. If the dmabuf has been imported by v4l2loopback, then no action
+from server AIS/qcarcam side is needed.
+3. App calls VIDIOC_STREAMON.
+
+Note that new buffers can only be imported before VIDIOC_STREAMON due
+to hard-to-overcome qcarcam API limitations.
+
+Signed-off-by: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+---
+ drivers/v4l2loopback-master_v2/v4l2loopback.c | 74 +++++++++++++++++++
+ include/uapi/ais/media/ais_v4l2loopback.h     |  8 ++
+ 2 files changed, 82 insertions(+)
+
+diff --git a/drivers/v4l2loopback-master_v2/v4l2loopback.c b/drivers/v4l2loopback-master_v2/v4l2loopback.c
+index c66549838..4ba3eb4d2 100644
+--- a/drivers/v4l2loopback-master_v2/v4l2loopback.c
++++ b/drivers/v4l2loopback-master_v2/v4l2loopback.c
+@@ -367,10 +367,12 @@ struct v4l2_streamdata {
+ 
+ 	struct dma_buf *dmabufs[MAX_BUFFERS];
+ 	struct completion allocbufs_complete;
++	struct completion importbufs_complete;
+ 	int allocbufs_ret;
+ 	int buffers_number;  /* should not be big, 4 is a good choice */
+ 	struct v4l2l_buffer buffers[MAX_BUFFERS]; /* inner driver buffers */
+ 	int used_buffers; /* number of the actually used buffers */
++	int dmabufs_queued; /* number of queued dmabufs */
+ 	unsigned int use_buf_width;
+ 	u8 is_streaming;
+ 
+@@ -705,6 +707,7 @@ static struct v4l2_loopback_device *v4l2loopback_getdevice(struct file *f)
+ 
+ /* forward declarations */
+ static void init_buffers(struct v4l2_streamdata *data);
++static int import_dma_buffers(struct v4l2_loopback_opener *opener, int index, int fd);
+ static int allocate_dma_buffers(struct v4l2_loopback_opener *opener, struct v4l2_streamdata *data);
+ 
+ static int free_buffers(struct v4l2_streamdata *data);
+@@ -1464,6 +1467,7 @@ static int vidioc_reqbufs(struct file *file, void *fh,
+ 	switch (b->memory) {
+ 	case V4L2_MEMORY_USERPTR:
+ 	case V4L2_MEMORY_MMAP:
++	case V4L2_MEMORY_DMABUF:
+ 		/* do nothing here, buffers are always allocated */
+ 		if (b->count < 1 || data->buffers_number < 1)
+ 			return 0;
+@@ -1728,6 +1732,14 @@ static int vidioc_qbuf(struct file *file,
+ 	switch (buf->type) {
+ 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+ 		CAM_DBG(CAM_V4L2, "[dev %s] capture QBUF index: %d", dev->vdev->name, index);
++
++		if (buf->memory == V4L2_MEMORY_DMABUF) {
++			rc = import_dma_buffers(opener, index, buf->m.fd);
++			if (rc)
++				return rc;
++			b->buffer = *buf;
++		}
++
+ 		rc = set_bufstate(data, b, V4L2L_BUF_READY_Q);
+ 		if (rc < 0)
+ 			CAM_ERR(CAM_V4L2, "[dev %s] capture QBUF index: %d fail",
+@@ -2025,6 +2037,7 @@ static int vidioc_streamoff(struct file *file,
+ 		CAM_WARN(CAM_V4L2, "streamoff");
+ 
+ 		set_allbufs_state(data, V4L2L_BUF_PENDING);
++		data->dmabufs_queued = 0;
+ 
+ 		if (dev->state < V4L2L_READY_FOR_CAPTURE) {
+ 			CAM_WARN(CAM_V4L2, "proxy already exit, need return");
+@@ -2032,6 +2045,9 @@ static int vidioc_streamoff(struct file *file,
+ 		}
+ 
+ 		if (opener->connected_opener) {
++			send_v4l2_event_ex(opener->connected_opener, AIS_V4L2_CLIENT_OUTPUT,
++				AIS_V4L2_IMPORT_BUFS, 0);
++
+ 			send_v4l2_event(opener->connected_opener, AIS_V4L2_CLIENT_OUTPUT,
+ 				AIS_V4L2_STOP_INPUT);
+ 			rc = wait_for_completion_timeout(&data->ctrl_complete,
+@@ -2337,6 +2353,10 @@ static int process_set_bufs(struct ais_v4l2_control_t *kcmd, struct v4l2_streamd
+ 						bufs.fds[i]);
+ 					return -EINVAL;
+ 				}
++
++				if (data->dmabufs[i]) {
++					dma_buf_put(data->dmabufs[i]);
++				}
+ 				data->dmabufs[i] = dmabuf;
+ 			}
+ 
+@@ -2478,6 +2498,18 @@ static int process_output_cmd(struct v4l2_loopback_device *dev,
+ 		rc = process_set_bufs(kcmd, data);
+ 		break;
+ 	}
++	case AIS_V4L2_OUTPUT_PRIV_GET_IMPORTED_BUFS: {
++		struct ais_v4l2_imported_buf_t b_info;
++		int i;
++		b_info.nbufs = data->used_buffers;
++		for (i = 0; i < b_info.nbufs; i++) {
++			b_info.fds[i] = dma_buf_fd(data->dmabufs[i], 0);
++			b_info.sizes[i] = data->dmabufs[i]->size;
++		}
++		copy_to_user(u64_to_user_ptr(kcmd->payload), &b_info, sizeof(b_info));
++		complete(&data->importbufs_complete);
++		break;
++	}
+ 	case AIS_V4L2_OUTPUT_PRIV_SET_INPUT_SIGNAL_EVENT: {
+ 		rc = process_set_input_event(kcmd, opener);
+ 		break;
+@@ -2870,6 +2902,47 @@ static int free_buffers(struct v4l2_streamdata *data)
+ 	return 0;
+ }
+ 
++static int import_dma_buffers(struct v4l2_loopback_opener *opener, int index, int fd)
++{
++	int rc = 0;
++	struct v4l2_streamdata *data = opener->data;;
++	struct dma_buf *dmabuf = dma_buf_get(fd);
++
++	if (!dmabuf)
++		return -EINVAL;
++
++	if (!data)
++		return -EINVAL;
++
++	if (data->dmabufs[index] == dmabuf) {
++		return 0;
++	} else if (data->dmabufs[index]) {
++		dma_buf_put(data->dmabufs[index]);
++	}
++
++	CAM_DBG(CAM_V4L2, "importing buf %p idx=%d\n", dmabuf, index);
++
++	data->dmabufs[index] = dmabuf;
++	data->dmabufs_queued++;
++
++	if (data->dmabufs_queued < data->used_buffers)
++		return 0;
++
++	send_v4l2_event_ex(opener->connected_opener, AIS_V4L2_CLIENT_OUTPUT,
++			AIS_V4L2_IMPORT_BUFS, 1);
++	/* wait for the signal */
++	rc = wait_for_completion_timeout(&data->importbufs_complete,
++			msecs_to_jiffies(ALLOCBUFS_TIMEOUT));
++	if (rc) {
++		rc = 0;
++	} else {
++		CAM_ERR(CAM_V4L2, "import fail, timeout %d\n", rc);
++		rc = -ETIMEDOUT;
++		return rc;
++	}
++	return 0;
++}
++
+ /* allocates buffers, if buffer_size is set */
+ static int allocate_dma_buffers(struct v4l2_loopback_opener *opener,
+ 	struct v4l2_streamdata *data)
+@@ -2985,6 +3058,7 @@ int init_stream_data(struct v4l2_streamdata *data)
+ 	init_completion(&data->sparam_complete);
+ 	init_completion(&data->ctrl_complete);
+ 	init_completion(&data->allocbufs_complete);
++	init_completion(&data->importbufs_complete);
+ 
+ 	mutex_init(&data->buf_mutex);
+ 	mutex_init(&data->capbufs_mutex);
+diff --git a/include/uapi/ais/media/ais_v4l2loopback.h b/include/uapi/ais/media/ais_v4l2loopback.h
+index 7293eefe8..f9a7fdf97 100644
+--- a/include/uapi/ais/media/ais_v4l2loopback.h
++++ b/include/uapi/ais/media/ais_v4l2loopback.h
+@@ -35,6 +35,7 @@ enum AIS_V4L2_NOTIFY_CMD {
+ 	AIS_V4L2_EVENT_INPUT_SIGNAL,/* nofity the capture side the input */
+ 	AIS_V4L2_EVENT_ERROR,       /* nofity the capture side the error */
+ 	AIS_V4L2_EVENT_FRAME_DROP,  /* nofity the capture side frame drop*/
++	AIS_V4L2_IMPORT_BUFS,       /* notify the output side import the bufs */
+ };
+ 
+ enum AIS_V4L2_PARAM_CODE {
+@@ -91,6 +92,7 @@ enum AIS_V4L2_OUTPUT_PRIVATE_CMD {
+ 	AIS_V4L2_OUTPUT_PRIV_SET_INPUT_SIGNAL_EVENT,
+ 	AIS_V4L2_OUTPUT_PRIV_SET_ERROR_EVENT,
+ 	AIS_V4L2_OUTPUT_PRIV_SET_FRAME_DROP_EVENT,
++	AIS_V4L2_OUTPUT_PRIV_GET_IMPORTED_BUFS,
+ };
+ 
+ enum AIS_V4L2_CAPTURE_PRIVATE_CMD {
+@@ -114,6 +116,12 @@ struct ais_v4l2_buffers_t {
+ 	__s32 fds[MAX_AIS_BUFFERS_NUM];
+ };
+ 
++struct ais_v4l2_imported_buf_t {
++	__u32 nbufs;
++	__s32 fds[MAX_AIS_BUFFERS_NUM];
++	__u32 sizes[MAX_AIS_BUFFERS_NUM];
++};
++
+ struct ais_v4l2_buffer_ext_t {
+ 	__u32 batch_num;
+ 	__u32 reversed;
+-- 
+2.49.0
+

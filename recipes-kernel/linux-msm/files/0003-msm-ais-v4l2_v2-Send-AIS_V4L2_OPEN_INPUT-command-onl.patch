@@ -1,0 +1,49 @@
+From f3ce4a2d3b5d7dbdfc4201674542f4b0d437f5c5 Mon Sep 17 00:00:00 2001
+From: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+Date: Mon, 11 Aug 2025 13:42:44 +0200
+Subject: [PATCH 3/4] msm: ais: v4l2_v2: Send AIS_V4L2_OPEN_INPUT command only
+ for first open().
+
+Send AIS_V4L2_OPEN_INPUT command only for the first v4l2 open(). All
+subsequent open()s will not cause any device state change. Conversely,
+send AIS_V4L2_CLOSE_INPUT only at the last reader close() call.
+
+This change fixes multi-reader support for v4l2loopback+ais.
+
+Signed-off-by: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+---
+ drivers/v4l2loopback-master_v2/v4l2loopback.c | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/v4l2loopback-master_v2/v4l2loopback.c b/drivers/v4l2loopback-master_v2/v4l2loopback.c
+index 015a4d219..c66549838 100644
+--- a/drivers/v4l2loopback-master_v2/v4l2loopback.c
++++ b/drivers/v4l2loopback-master_v2/v4l2loopback.c
+@@ -2720,6 +2720,8 @@ static int v4l2_loopback_open(struct file *file)
+ 			CAM_INFO(CAM_V4L2, "capture opener %p, proxy opener %p, data %p",
+ 				opener, connected_opener, data);
+ 			mutex_unlock(&dev->dev_mutex);
++		} else if (dev->state == V4L2L_OPENED) {
++			etype = V4L2L_READER;
+ 		} else {
+ 			CAM_WARN(CAM_V4L2, "invalid operation state %d", dev->state);
+ 			return -EINVAL;
+@@ -2784,10 +2786,13 @@ static int v4l2_loopback_close(struct file *file)
+ 			opener->connected_opener = NULL;
+ 		}
+ 	} else {
+-		/* notify ais_v4l2_proxy to close the input */
++		/* notify ais_v4l2_proxy to close the input.
++		 * Do this only when the last reader closes (there is at most
++		 * 1 writer + 1 reader) */
+ 		mutex_lock(&dev->dev_mutex);
+ 		CAM_WARN(CAM_V4L2, "v4l2 open_count is %d when app close", dev->open_count.counter);
+-		if (dev->state >= V4L2L_READY_FOR_CAPTURE) {
++
++		if (dev->state > V4L2L_READY_FOR_CAPTURE && dev->open_count.counter <= 2) {
+ 			if (opener->connected_opener) {
+ 				opener->connected_opener->connected_opener = NULL;
+ 				send_v4l2_event(opener->connected_opener, AIS_V4L2_CLIENT_OUTPUT,
+-- 
+2.49.0
+
