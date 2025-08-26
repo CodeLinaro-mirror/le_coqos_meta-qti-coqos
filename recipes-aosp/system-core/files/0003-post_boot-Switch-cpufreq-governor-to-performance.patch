@@ -1,0 +1,52 @@
+From 3a47f2b3cf778d4428e2923baa4d12e2321c6631 Mon Sep 17 00:00:00 2001
+From: Marcin Mozejko <mmozejko@qti.qualcomm.com>
+Date: Tue, 19 Aug 2025 21:36:59 +0200
+Subject: [PATCH 3/3] post_boot: Switch cpufreq governor to performance.
+
+The init_post_boot script which is called by init_post_boot.service
+sets CPU freq governor to 'schedutil'. For this reason it was masked
+in kernel bootargs of Linux host VM in 'coqos-guest-config.xml'.
+Avoid masking out complete service and change cpufreq governor
+setting instead.
+
+Signed-off-by: Marcin Mozejko <mmozejko@qti.qualcomm.com>
+---
+ rootdir/etc/init.qcom.post_boot.sh | 18 +++---------------
+ 1 file changed, 3 insertions(+), 15 deletions(-)
+
+diff --git a/rootdir/etc/init.qcom.post_boot.sh b/rootdir/etc/init.qcom.post_boot.sh
+index a5bb0686e..919a17753 100755
+--- a/rootdir/etc/init.qcom.post_boot.sh
++++ b/rootdir/etc/init.qcom.post_boot.sh
+@@ -432,25 +432,13 @@ case "$target" in
+     echo 0 > /proc/sys/kernel/sched_boost
+ 
+     # configure governor settings for silver cluster
+-    echo "schedutil" > $cpufreq_silver/scaling_governor
+-    echo 0 > $cpufreq_silver/schedutil/up_rate_limit_us
+-    echo 0 > $cpufreq_silver/schedutil/down_rate_limit_us
+-    echo 1209600 > $cpufreq_silver/schedutil/hispeed_freq
+-    echo 1 > $cpufreq_silver/schedutil/pl
++    echo "performance" > /sys/devices/system/cpu/cpufreq/policy0/scaling_governor
+ 
+     # configure governor settings for gold cluster
+-    echo "schedutil" > $cpufreq_gold/scaling_governor
+-    echo 0 > $cpufreq_gold/schedutil/up_rate_limit_us
+-    echo 0 > $cpufreq_gold/schedutil/down_rate_limit_us
+-    echo 1612800 > $cpufreq_gold/schedutil/hispeed_freq
+-    echo 1 > $cpufreq_gold/schedutil/pl
++    echo "performance" > /sys/devices/system/cpu/cpufreq/policy4/scaling_governor
+ 
+     # configure governor settings for gold+ cluster
+-    echo "schedutil" > $cpufreq_prime/scaling_governor
+-    echo 0 > $cpufreq_prime/schedutil/up_rate_limit_us
+-    echo 0 > $cpufreq_prime/schedutil/down_rate_limit_us
+-    echo 1612800 > $cpufreq_prime/schedutil/hispeed_freq
+-    echo 1 > $cpufreq_prime/schedutil/pl
++    echo "performance" > /sys/devices/system/cpu/cpufreq/policy7/scaling_governor
+ 
+     # configure input boost settings
+     echo "0:1324800" > /sys/module/cpu_boost/parameters/input_boost_freq
+-- 
+2.49.0
+
