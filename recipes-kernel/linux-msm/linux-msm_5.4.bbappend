@@ -12,6 +12,7 @@ SRC_URI += "file://0006-st_asm330lhh-calculate-actual-odr-value-using-INTERN.pat
 SRC_URI += "file://0007-qcom_scm-Add-support-for-QCPE-3.0.0-on-HOS.patch"
 SRC_URI += "file://0008-qcom_scm-coqoshv-Implement-COQOSHV-QCPE-system-liste.patch"
 SRC_URI += "file://0009-Add-kernel-patch-to-measure-blocking-time-for-atomic.patch"
+SRC_URI += "file://0010-boot_stats-Add-State-Manager-KPI-markers.patch"
 
 #--------------------------------------------------------------------------------------------
 # Put kernel config fragments here:

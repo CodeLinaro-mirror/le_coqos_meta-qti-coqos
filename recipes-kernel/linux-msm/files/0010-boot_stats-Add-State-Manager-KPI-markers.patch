@@ -1,0 +1,121 @@
+From d211975db6e5d185ec7aee78e38baf0a13b91b16 Mon Sep 17 00:00:00 2001
+From: Anandu Sudhakaran <anansudh@qti.qualcomm.com>
+Date: Mon, 11 Aug 2025 11:43:36 +0200
+Subject: [PATCH 10/11] boot_stats: Add State Manager KPI markers.
+
+Signed-off-by: Anandu Sudhakaran <anansudh@qti.qualcomm.com>
+---
+ drivers/soc/qcom/boot_stats.c | 51 +++++++++++++++++++++++++++++++++--
+ 1 file changed, 49 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/soc/qcom/boot_stats.c b/drivers/soc/qcom/boot_stats.c
+index a279143e4..ce76f3a73 100644
+--- a/drivers/soc/qcom/boot_stats.c
++++ b/drivers/soc/qcom/boot_stats.c
+@@ -46,9 +46,17 @@ struct boot_stats {
+ #endif
+ };
+ 
++struct sm_stats {
++	uint32_t sm_boot_kpi_init;
++	uint32_t sm_vmctrl_init;
++	uint32_t sm_wait_signals;
++	uint32_t sm_boot_linux;
++};
++
+ static void __iomem *mpm_counter_base;
+ static uint32_t mpm_counter_freq;
+ static struct boot_stats __iomem *boot_stats;
++static struct sm_stats __iomem *sm_stats;
+ 
+ #ifdef CONFIG_QGKI_MSM_BOOT_TIME_MARKER
+ 
+@@ -326,6 +334,19 @@ static void set_bootloader_stats(bool hibernation_restore)
+ 	}
+ 	_create_boot_marker("M - APPSBL End - ",
+ 		readl_relaxed(&boot_stats->bootloader_end));
++
++	if (IS_ERR_OR_NULL(sm_stats)) {
++		pr_err("boot_marker: imem for sm not initialized!\n");
++		return;
++	}
++	_create_boot_marker("M - SM Boot KPI Init - ",
++		readl_relaxed(&sm_stats->sm_boot_kpi_init));
++	_create_boot_marker("M - SM VMctrl Init - ",
++		readl_relaxed(&sm_stats->sm_vmctrl_init));
++	_create_boot_marker("M - SM Wait Signals - ",
++		readl_relaxed(&sm_stats->sm_wait_signals));
++	_create_boot_marker("M - SM Boot Linux - ",
++		readl_relaxed(&sm_stats->sm_boot_linux));
+ }
+ 
+ void place_marker(const char *name)
+@@ -521,7 +542,7 @@ static void exit_bootkpi(void)
+ 
+ static int mpm_parse_dt(void)
+ {
+-	struct device_node *np_imem, *np_mpm2;
++	struct device_node *np_imem, *np_mpm2, *np_imemsm;
+ 
+ 	np_imem = of_find_compatible_node(NULL, NULL,
+ 				"qcom,msm-imem-boot_stats");
+@@ -554,8 +575,19 @@ static int mpm_parse_dt(void)
+ 	} else
+ 		goto err2;
+ 
+-	return 0;
++	np_imemsm = of_find_compatible_node(NULL, NULL,
++				"qcom,msm-imem-smboot_stats");
++	if (!np_imemsm) {
++		pr_err("can't find qcom,msm-imem-smboot node\n");
++		of_node_put(np_imemsm);
++	}
++	sm_stats = of_iomap(np_imemsm, 0);
++	if(!sm_stats) {
++		pr_err("sm_stats: Can't map imem\n");
++		of_node_put(np_imemsm);
++	}
+ 
++	return 0;
+ err2:
+ 	of_node_put(np_mpm2);
+ err1:
+@@ -575,6 +607,19 @@ static void print_boot_stats(void)
+ 		readl_relaxed(mpm_counter_base));
+ 	pr_info("KPI: Kernel MPM Clock frequency = %u\n",
+ 		mpm_counter_freq);
++
++	if (IS_ERR_OR_NULL(sm_stats)) {
++		pr_err("boot_marker: imem for sm not initialized!\n");
++		return;
++	}
++	pr_info("KPI: State Manager boot kpi init count = %u\n",
++		readl_relaxed(&sm_stats->sm_boot_kpi_init));
++	pr_info("KPI: State Manager VMCtrl init count = %u\n",
++		readl_relaxed(&sm_stats->sm_vmctrl_init));
++	pr_info("KPI: State Manager wait signal count = %u\n",
++		readl_relaxed(&sm_stats->sm_wait_signals));
++	pr_info("KPI: State Manager boot linux count = %u\n",
++		readl_relaxed(&sm_stats->sm_boot_linux));
+ }
+ 
+ static int __init boot_stats_init(void)
+@@ -598,6 +643,7 @@ static int __init boot_stats_init(void)
+ 	} else {
+ 		iounmap(boot_stats);
+ 		iounmap(mpm_counter_base);
++		iounmap(sm_stats);
+ 	}
+ 
+ 	return 0;
+@@ -610,6 +656,7 @@ static void __exit boot_stats_exit(void)
+ 		exit_bootkpi();
+ 		iounmap(boot_stats);
+ 		iounmap(mpm_counter_base);
++		iounmap(sm_stats);
+ 	}
+ }
+ module_exit(boot_stats_exit)
+-- 
+2.49.0
+
