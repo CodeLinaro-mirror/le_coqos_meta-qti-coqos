@@ -13,9 +13,11 @@ SRC_URI += "file://0007-qcom_scm-Add-support-for-QCPE-3.0.0-on-HOS.patch"
 SRC_URI += "file://0008-qcom_scm-coqoshv-Implement-COQOSHV-QCPE-system-liste.patch"
 SRC_URI += "file://0009-Add-kernel-patch-to-measure-blocking-time-for-atomic.patch"
 SRC_URI += "file://0010-boot_stats-Add-State-Manager-KPI-markers.patch"
+SRC_URI += "file://0011-tz_log-Register-hyp-related-nodes-only-if-related-co.patch"
 
 #--------------------------------------------------------------------------------------------
 # Put kernel config fragments here:
 #--------------------------------------------------------------------------------------------
 SRC_URI += "file://enable_qcom_scm_qcpe_hos.cfg"
+SRC_URI += "file://enable_qti_tz_log.cfg"
 SRC_URI += "file://enable_system_listener_qcpe_hos.cfg"
