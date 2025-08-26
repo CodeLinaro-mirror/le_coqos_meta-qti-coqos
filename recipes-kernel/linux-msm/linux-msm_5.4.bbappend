@@ -11,6 +11,7 @@ SRC_URI += "file://0005-pinctrl-sm8150-Remove-GPIO-124-from-PDC-wakeirq-map.patc
 SRC_URI += "file://0006-st_asm330lhh-calculate-actual-odr-value-using-INTERN.patch"
 SRC_URI += "file://0007-qcom_scm-Add-support-for-QCPE-3.0.0-on-HOS.patch"
 SRC_URI += "file://0008-qcom_scm-coqoshv-Implement-COQOSHV-QCPE-system-liste.patch"
+SRC_URI += "file://0009-Add-kernel-patch-to-measure-blocking-time-for-atomic.patch"
 
 #--------------------------------------------------------------------------------------------
 # Put kernel config fragments here:
