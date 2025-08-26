@@ -38,38 +38,44 @@ SRC_URI += "file://enable_vivid.cfg"
 SRC_URI += "file://set_adreno_governor_performance.cfg"
 
 #--------------------------------------------------------------------------------------------
-# Below are workarounds needed for out-of-tree patches for V4L2loopback to be applied
+# Workarounds for applying out-of-tree patches on repositories mapped by repo manifest
 #--------------------------------------------------------------------------------------------
 
 SRC_DIR = "${SRC_DIR_ROOT}/kernel/msm-5.4"
 
-# Dirty hack to make patching of "techpack" stuff work.
-# This reinforces the fix for broken .git symlinks present in COQOS SDK layers.
-do_fixup_dotgit_repo_n() {
-    if [ -L "${S}/${1}/.git" ]; then
-        if [ ! -e "${S}/${1}/.git" ]; then
-           echo "Symlink ~.git is not valid!. Creating a .git repo copy."
-           rm "${S}/${1}/.git"
-           cp -r -L "${SRC_DIR}/${1}/.git" "${S}/${1}/.git"
+do_fixup_repo_copy() {
+    local dir_path="${S}/${1}"
+    local src_dir_path="${SRC_DIR}/${1}"
+    if [ -z "${1}" ]; then
+        dir_path="${S}"
+        src_dir_path="${SRC_DIR}"
+    fi
+    if [ -d "${dir_path}" ]; then
+        broken_symlinks=$(find "${dir_path}" -type l | while read link; do
+            if [ ! -e "$(readlink -f "$link")" ]; then
+                echo "$link"
+            fi
+        done)
+        if [ -n "${broken_symlinks}" ]; then
+            # Remove broken repository copy
+            echo "Found broken symlinks in ${dir_path}:"
+            echo "${broken_symlinks}"
+            rm -rf "${dir_path}"
+            # Re-create the repository from manifest checkout
+            # Use --no-local to allow cloning a local repository with symlinks
+            git clone --no-local "${src_dir_path}" "${dir_path}"
         fi
     fi
 }
 
-do_fixup_dotgit_repo() {
-    if [ -L "${S}/.git" ]; then
-        if [ ! -e "${S}/.git" ]; then
-            echo "Symlink ~.git is not valid!. Creating a .git repo copy."
-            rm "${S}/.git"
-            cp -r -L "${SRC_DIR}/.git" "${S}/.git"
-        fi
-    fi
-
-    do_fixup_dotgit_repo_n techpack/display
-    do_fixup_dotgit_repo_n techpack/ais
-    do_fixup_dotgit_repo_n techpack/video
+do_fixup_repos() {
+    do_fixup_repo_copy ""
+    do_fixup_repo_copy "techpack/display"
+    do_fixup_repo_copy "techpack/ais"
+    do_fixup_repo_copy "techpack/video"
 }
 
-addtask do_fixup_dotgit_repo after do_symlink_kernsrc before do_validate_branches
+addtask do_fixup_repos after do_symlink_kernsrc before do_validate_branches
 
 # find_patches override for kernel-yocto.bbclass to ignore patches with patchdir=techpack completely.
 # They will be handled separately
