@@ -41,41 +41,72 @@ SRC_URI += "file://set_adreno_governor_performance.cfg"
 # Workarounds for applying out-of-tree patches on repositories mapped by repo manifest
 #--------------------------------------------------------------------------------------------
 
-SRC_DIR = "${SRC_DIR_ROOT}/kernel/msm-5.4"
-
 do_fixup_repo_copy() {
-    local dir_path="${S}/${1}"
-    local src_dir_path="${SRC_DIR}/${1}"
-    if [ -z "${1}" ]; then
-        dir_path="${S}"
-        src_dir_path="${SRC_DIR}"
+    local src_dir_path="${1}"
+    local dest_dir_path="${2}"
+
+    if [ -L "${dest_dir_path}" ]; then
+        # Follow the symlink
+        dest_dir_path=$(readlink -f "${dest_dir_path}")
     fi
-    if [ -d "${dir_path}" ]; then
-        broken_symlinks=$(find "${dir_path}" -type l | while read link; do
-            if [ ! -e "$(readlink -f "$link")" ]; then
-                echo "$link"
-            fi
-        done)
-        if [ -n "${broken_symlinks}" ]; then
-            # Remove broken repository copy
-            echo "Found broken symlinks in ${dir_path}:"
-            echo "${broken_symlinks}"
-            rm -rf "${dir_path}"
-            # Re-create the repository from manifest checkout
-            # Use --no-local to allow cloning a local repository with symlinks
-            git clone --no-local "${src_dir_path}" "${dir_path}"
+
+    if [ -d "${src_dir_path}" ]; then
+        # Remove any existing repo
+        rm -rf "${dest_dir_path}"
+        # Re-create the repository from manifest checkout
+        # Use --no-local to allow cloning a local repository with symlinks
+        if ! git clone --depth 1 --no-local "${src_dir_path}" "${dest_dir_path}"; then
+            bb.error "Error cloning repository from ${src_dir_path} to ${dest_dir_path}"
         fi
+    else
+        bb.error "Error: ${src_dir_path} is not a directory"
     fi
 }
 
 do_fixup_repos() {
-    do_fixup_repo_copy ""
-    do_fixup_repo_copy "techpack/display"
-    do_fixup_repo_copy "techpack/ais"
-    do_fixup_repo_copy "techpack/video"
+    # recreate kernel repo itself
+    do_fixup_repo_copy "${SRC_DIR_ROOT}/kernel/msm-5.4" "${S}"
+
+    # recreate the in-kernel nested techpack repos
+    for child_dir in $(ls -d "${SRC_DIR_ROOT}/kernel/msm-5.4/techpack"/*); do
+        if [ -d "${child_dir}" ] && [ -d "${child_dir}/.git" ]; then
+            child_dir_name=$(basename "${child_dir}")
+            do_fixup_repo_copy "${SRC_DIR_ROOT}/kernel/msm-5.4/techpack/${child_dir_name}" "${S}/techpack/${child_dir_name}"
+        fi
+    done
+}
+
+DTS_SRC = "${WORKDIR}/vendor/qcom/proprietary/devicetree"
+DTS_LINK = "${S}/arch/${ARCH}/boot/dts/vendor"
+
+DTS_CAM_SRC = "${WORKDIR}/vendor/qcom/proprietary/camera-devicetree"
+DTS_CAM_LINK = "${S}/arch/${ARCH}/boot/dts/vendor/qcom/camera"
+
+DTS_DISP_SRC = "${WORKDIR}/vendor/qcom/proprietary/display-devicetree/display"
+DTS_DISP_LINK = "${S}/arch/${ARCH}/boot/dts/vendor/qcom/display"
+
+create_sym_link() {
+    local src=$1
+    local dest=$2
+    if [ -L "${dest}" ]; then
+        rm -f "${dest}"
+    fi
+    if [ -e "${dest}" ]; then
+        rm -rf "${dest}"
+    fi
+    ln -s "${src}" "${dest}"
+}
+
+do_fixup_dts_symlinks() {
+    # due to recreation of repos, symlinks need to be recreated as well
+    create_sym_link "${DTS_SRC}" "${DTS_LINK}"
+    create_sym_link "${DTS_CAM_SRC}" "${DTS_CAM_LINK}"
+    create_sym_link "${DTS_DISP_SRC}" "${DTS_DISP_LINK}"
 }
 
 addtask do_fixup_repos after do_symlink_kernsrc before do_validate_branches
+addtask do_fixup_dts_symlinks after do_fixup_repos before do_generate_gki_defconfig
+addtask do_generate_gki_defconfig after do_fixup_dts_symlinks
 
 # find_patches override for kernel-yocto.bbclass to ignore patches with patchdir=techpack completely.
 # They will be handled separately
@@ -112,7 +143,7 @@ def find_techpack_patches(d):
 # Another hack to be able to apply patches on "techpack" repo.
 # The right solution would be to teach kernel-yocto.bbclass to work
 # correctly with multiple git repos in SRC_URI.
-do_patch_append() {
+do_patch:append() {
     cd ${S}/techpack/ais/
     patches="${@" ".join(find_techpack_patches(d))}"
     for s in ${patches}; do
