@@ -1,0 +1,46 @@
+From 0e38b7b26f4e1d1300ac87ca8e41dfe487b616d7 Mon Sep 17 00:00:00 2001
+From: Mikhail Golubev-Ciuchea <mgolubev@qti.qualcomm.com>
+Date: Fri, 21 Mar 2025 12:31:43 +0100
+Subject: [PATCH] vrend_renderer: fence: Fix "failed to export fence sync
+ object" error.
+
+A race condtion can occur when calling vrend_renderer_create_fence().
+The fence mutex is released in the function before calling
+vrend_renderer_export_ctx0_fence() and it becomes possible for
+thread_sync() to preempt execution and steal the fence for waiting. If
+there is only one fence left in the wait queue, virgl_fence_set_fd()
+won't find it resulting in the following messages printed out:
+
+Sep 20 10:44:25 sa81x5agl bash[1576]: failed to export fence sync object
+Sep 20 10:44:25 sa81x5agl bash[1576]: virgl_fence_set_fd: failed err=-9
+
+To fix the issue check for the last fence being processed.
+
+Signed-off-by: Mikhail Golubev-Ciuchea <mgolubev@qti.qualcomm.com>
+---
+ src/vrend_renderer.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/vrend_renderer.c b/src/vrend_renderer.c
+index 041a03e1..a4b74f3c 100644
+--- a/src/vrend_renderer.c
++++ b/src/vrend_renderer.c
+@@ -13608,6 +13608,15 @@ int vrend_renderer_export_ctx0_fence(uint32_t fence_id, int* out_fd) {
+       /* consider signaled when no active ctx0 fence at all */
+       if (!found && !seen_first)
+          found = true;
++
++      /* last resort */
++      if (!found) {
++         if (vrend_state.fence_waiting
++            && vrend_state.fence_waiting->fence_id == fence_id) {
++            found = true;
++            fence = vrend_state.fence_waiting;
++         }
++      }
+    }
+ 
+    if (found) {
+-- 
+2.43.2
+

@@ -8,6 +8,7 @@ PACKAGES = "packagegroup-coqos-base"
 RDEPENDS:${PN} += "\
     device-tree \
     trace-emlog \
+    virglrenderer \
     "
 
 ALLOW_EMPTY:${PN} = "1"
