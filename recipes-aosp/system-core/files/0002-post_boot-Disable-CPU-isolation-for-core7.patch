@@ -1,0 +1,33 @@
+From b66af1f0ea465d54263af57d213757c650b72741 Mon Sep 17 00:00:00 2001
+From: Anandu Sudhakaran <anansudh@qti.qualcomm.com>
+Date: Wed, 16 Oct 2024 22:40:16 +0200
+Subject: [PATCH 2/3] post_boot: Disable CPU isolation for core7.
+
+The init_post_boot script which is called by init_post_boot.service sets
+the /sys/devices/system/cpu/cpu7/core_ctl/min_cpus to 0 which enable the
+core isolation but due to a bug in the gpio direct connectd interrupt
+the core7 is put into suspend with pending interrupts when core
+isolation is enabled. This change will disable the core isolation and
+hide the gpio interrupt bug.
+
+Signed-off-by: Anandu Sudhakaran <anansudh@qti.qualcomm.com>
+---
+ rootdir/etc/init.qcom.post_boot.sh | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rootdir/etc/init.qcom.post_boot.sh b/rootdir/etc/init.qcom.post_boot.sh
+index a2582e62f..a5bb0686e 100755
+--- a/rootdir/etc/init.qcom.post_boot.sh
++++ b/rootdir/etc/init.qcom.post_boot.sh
+@@ -403,7 +403,7 @@ case "$target" in
+     echo 3 > /sys/devices/system/cpu/cpu${gold_core}/core_ctl/task_thres
+ 
+     # Core control parameters for gold+
+-    echo 0 > /sys/devices/system/cpu/cpu${prime_core}/core_ctl/min_cpus
++    echo 1 > /sys/devices/system/cpu/cpu${prime_core}/core_ctl/min_cpus
+     echo 60 > /sys/devices/system/cpu/cpu${prime_core}/core_ctl/busy_up_thres
+     echo 30 > /sys/devices/system/cpu/cpu${prime_core}/core_ctl/busy_down_thres
+     echo 100 > /sys/devices/system/cpu/cpu${prime_core}/core_ctl/offline_delay_ms
+-- 
+2.49.0
+
