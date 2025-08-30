@@ -10,7 +10,7 @@ LIC_FILES_CHKSUM = " \
     file://COPYING;md5=c81c08eeefd9418fca8f88309a76db10 \
 "
 
-DEPENDS = "libdrm virtual/libgles2 virtual/libgbm libepoxy gbm gbm-headers glib-2.0"
+DEPENDS = "libdrm virtual/libgles2 virtual/libgbm libepoxy gbm gbm-headers glib-2.0 wayland"
 DEPENDS_remove_class-native = "virtual/libgles2"
 DEPENDS_append_class-native = " virtual/libgl"
 
