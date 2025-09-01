@@ -20,6 +20,10 @@ module_conf_emlog = "options emlog emlog_max_size=32768"
 KERNEL_MODULE_PACKAGE_SUFFIX = ""
 
 do_install:append() {
+    # Copy kernel module
+    install -d ${D}/lib/modules/${KERNEL_VERSION}/extra/
+    install -m 644 ${B}/emlog.ko ${D}/lib/modules/${KERNEL_VERSION}/extra/
+
     # Copy udev rule
     install -d ${D}/etc/udev/rules.d/
     install -m 644 ${WORKDIR}/emlog.rules ${D}/etc/udev/rules.d/
