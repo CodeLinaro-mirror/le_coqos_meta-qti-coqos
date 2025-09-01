@@ -24,10 +24,6 @@ S = "${WORKDIR}/kernel-module-vchar"
 
 EXTRA_OEMAKE += "-C linux COQOSHV_ABI_HEADERS=${STAGING_DIR_HOST}/usr/include/coqoshv-abi-kernel-headers"
 
-# disable debug_info to avoid error from QTI internal
-# binary-symbols-checker.bbclass
-EXTRA_OEMAKE += "KBUILD_CFLAGS_MODULE+=-g0"
-
 do_install_append() {
     # Create destination directories
     install -d ${D}/${includedir}/vchar-kernel-headers
