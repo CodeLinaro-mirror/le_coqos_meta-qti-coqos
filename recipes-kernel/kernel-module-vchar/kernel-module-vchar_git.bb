@@ -24,8 +24,12 @@ S = "${WORKDIR}/kernel-module-vchar"
 
 EXTRA_OEMAKE += "-C linux COQOSHV_ABI_HEADERS=${STAGING_DIR_HOST}/usr/include/coqoshv-abi-kernel-headers"
 
-do_install_append() {
-    # Create destination directories
+do_install:append() {
+    # Copy kernel module
+    install -d ${D}/lib/modules/${KERNEL_VERSION}/extra/
+    install -m 644 ${B}/linux/ixcf-vchar.ko ${D}/lib/modules/${KERNEL_VERSION}/extra/
+
+    # Create destination directory for headers
     install -d ${D}/${includedir}/vchar-kernel-headers
 
     # Install kernel headers
