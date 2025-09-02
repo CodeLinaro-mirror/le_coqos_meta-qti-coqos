@@ -1,0 +1,12 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+require {
+    type systemd_resolved_var_run_t;
+    type etc_t;
+}
+
+sysnet_manage_config(dnsmasq_t)
+allow dnsmasq_t systemd_resolved_var_run_t:dir { getattr search open read };
+allow dnsmasq_t etc_t:file map;
+

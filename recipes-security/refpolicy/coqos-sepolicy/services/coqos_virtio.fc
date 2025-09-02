@@ -1,0 +1,8 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+# Used to generate file contexts for coqos-virtio services
+
+/usr/bin/coqos-virtio-video     --  gen_context(system_u:object_r:coqos_virtio_video_exec_t,s0)
+/etc/qcom/qcom-sa8155p-android-decoder.ini      --  gen_context(system_u:object_r:opsy_etc_t,s0)
+/etc/qcom/qcom-sa8155p-android-encoder.ini      --  gen_context(system_u:object_r:opsy_etc_t,s0)

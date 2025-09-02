@@ -1,0 +1,9 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+require {
+    type proc_t;
+}
+
+allow ais_server_t proc_t:file { getattr ioctl open read };
+

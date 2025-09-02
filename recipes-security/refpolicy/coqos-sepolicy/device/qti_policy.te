@@ -1,0 +1,9 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+require {
+    type fs_t;
+}
+
+allow perf_hal_data_t fs_t:filesystem associate;
+

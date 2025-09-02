@@ -1,0 +1,19 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+ require {
+     type fs_t;
+ }
+
+require {
+    type persist_t;
+    type cgroup_t;
+    type init_t;
+}
+
+allow weston_t persist_t:dir { search };
+allow weston_t tmpfs_t:filesystem { getattr };
+allow weston_t cgroup_t:filesystem { getattr };
+allow weston_t init_t:dir { search };
+allow weston_t init_t:file { read open getattr ioctl };
+

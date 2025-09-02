@@ -1,0 +1,10 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+require {
+    type perf_hal_data_t;
+}
+
+allow initrc_t perf_hal_data_t:dir { search write add_name remove_name };
+allow initrc_t perf_hal_data_t:file { create getattr open read write append unlink };
+

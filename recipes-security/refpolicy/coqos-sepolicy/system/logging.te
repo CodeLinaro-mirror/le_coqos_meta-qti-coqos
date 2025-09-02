@@ -1,0 +1,8 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+require {
+    type qseecomd_t;
+}
+
+allow syslogd_t qseecomd_t:process signull;

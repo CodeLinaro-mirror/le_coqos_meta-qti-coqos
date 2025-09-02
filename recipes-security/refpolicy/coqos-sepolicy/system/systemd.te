@@ -1,0 +1,27 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+require {
+    type tmpfs_t;
+    type perf_hal_data_t;
+    type kernel_t;
+    type syslogd_var_run_t;
+    type syslogd_t;
+    type etc_t;
+    type devlog_t;
+}
+
+allow systemd_tmpfiles_t tmpfs_t:sock_file { getattr create setattr unlink write};
+allow systemd_tmpfiles_t perf_hal_data_t:dir { getattr relabelto relabelfrom read open };
+
+allow systemd_detect_virt_t self:unix_dgram_socket { create getopt setopt connect };
+allow systemd_detect_virt_t syslogd_var_run_t:dir { search };
+allow systemd_detect_virt_t devlog_t:sock_file { write };
+allow systemd_detect_virt_t syslogd_t:unix_dgram_socket { create getopt setopt connect sendto };
+
+allow systemd_coredump_t tmpfs_t:dir { search };
+allow systemd_coredump_t self:capability { sys_ptrace };
+allow systemd_coredump_t kernel_t:fifo_file { getattr ioctl read write };
+allow systemd_coredump_t etc_t:file map;
+allow systemd_coredump_t tmpfs_t:filesystem getattr;
+
