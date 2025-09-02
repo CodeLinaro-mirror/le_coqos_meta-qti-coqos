@@ -1,6 +1,8 @@
 COQOS_SEPOLICY_DIR := "${THISDIR}"
 CONTRIB_MODULES += " coqos_virtio dnsmasq logging systemd"
 
+POLICY_MODULES_EXCLUDE += "bluetooth"
+
 do_copy_coqos_sepolicy_modules() {
     cp -rf ${COQOS_SEPOLICY_DIR}/coqos-sepolicy ${WORKDIR}/
 }
