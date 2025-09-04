@@ -3,7 +3,8 @@ SUMMARY = "VCHAR"
 LICENSE = "GPL-2.0-only & GPL-2.0-only-WITH-Linux-syscall-note"
 
 LIC_FILES_CHKSUM = " \
-        file://${QTI_LICENSE_DIR}/GPL-2.0-only;md5=801f80980d171dd6425610833a22dbe6 \
+    file://${QTI_LICENSE_DIR}/GPL-2.0-only;md5=801f80980d171dd6425610833a22dbe6 \
+    file://${QTI_LICENSE_DIR}/GPL-2.0-only-WITH-Linux-syscall-note;md5=7725c035f5c9707decb7cf301273aecc \
 "
 
 inherit module
