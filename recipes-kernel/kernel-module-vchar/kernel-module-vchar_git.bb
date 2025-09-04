@@ -25,6 +25,8 @@ S = "${WORKDIR}/kernel-module-vchar"
 
 EXTRA_OEMAKE += "-C linux COQOSHV_ABI_HEADERS=${STAGING_DIR_HOST}/usr/include/coqoshv-abi-kernel-headers"
 
+MODULES_MODULE_SYMVERS_LOCATION := "linux"
+
 do_install:append() {
     # Copy kernel module
     install -d ${D}/lib/modules/${KERNEL_VERSION}/extra/
