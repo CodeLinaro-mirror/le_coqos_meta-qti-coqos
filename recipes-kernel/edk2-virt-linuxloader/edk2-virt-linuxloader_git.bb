@@ -10,10 +10,13 @@ LICENSE = "BSD-2-Clause & BSD-3-Clause & Apache-2.0"
 LIC_FILES_CHKSUM = "\
     file://${COMMON_LICENSE_DIR}/BSD-2-Clause;md5=cb641bc04cda31daea161b1bc15da69f \
     file://${COMMON_LICENSE_DIR}/BSD-3-Clause;md5=550794465ba0ec5312d6919e203a55f9 \
+    file://${COMMON_LICENSE_DIR}/Apache-2.0;md5=89aea4e17d99a7cacdbeed46a0096b10 \
 "
+DEPENDS += "android-clang-prebuilt-native"
 
 REPO_NAME= "coqos-edk2"
-SRC_URI = "${PATH_TO_REPO}/${REPO_NAME}/.git;protocol=${PROTO};destsuffix=${REPO_NAME};usehead=1"
+SRC_URI = "${PATH_TO_REPO}/${REPO_NAME}/.git;protocol=${PROTO};destsuffix=${REPO_NAME};usehead=1;name=edk2"
+
 SRCREV = "${AUTOREV}"
 
 S = "${WORKDIR}/${REPO_NAME}"
@@ -39,7 +42,7 @@ EXTRA_OEMAKE = "'BOOTLOADER_OUT=${S}/out' \
                 'BASE_ADDRESS=0x80000000' \
                 'HOS_VIRT=1' \
                 'HOS_VIRT_DTB_OVERLAY_ENABLED=1' \
-                'CLANG_BIN=${STAGING_BINDIR_NATIVE}/' "
+                'CLANG_BIN=${STAGING_DIR_NATIVE}/usr/share/android-clang-prebuilt-native/bin/' "
 
 do_compile () {
     export CC=${BUILD_CC}
