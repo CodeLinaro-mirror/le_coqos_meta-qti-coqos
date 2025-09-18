@@ -1,0 +1,19 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+[Unit]
+Description=ADB Daemon proxy
+After=usb.service
+Before=adbd.service
+
+[Service]
+Type=simple
+Restart=on-failure
+User=root
+Environment="ADB_USB_FFS_PATH=/dev/usb-ffs/adb-relay"
+Environment="ADB_USB_FFS_NAME=adb-relay"
+#Environment="ADB_TRACE=1"
+ExecStart=/usr/sbin/adbd-relay --host vsock:1000 --port 5555
+
+[Install]
+WantedBy=basic.target
