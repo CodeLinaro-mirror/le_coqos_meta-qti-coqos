@@ -12,4 +12,9 @@ RDEPENDS:${PN} += "\
     virglrenderer \
     "
 
+# Linux adbd-relay
+RDEPENDS:${PN} += "\
+    adbd-relay \
+    "
+
 ALLOW_EMPTY:${PN} = "1"
