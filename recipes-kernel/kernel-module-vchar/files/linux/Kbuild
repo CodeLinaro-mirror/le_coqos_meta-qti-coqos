@@ -1,4 +1,0 @@
-obj-m           := ixcf-vchar.o
-ixcf-vchar-objs := ../common/vchar.o vchar.o ../common/vring.o vring.o
-
-ccflags-y := -I$(src)/../include/ -I$(src)/../include/linux/arch/$(ARCH) -D__LINUX__ -I$(KERNEL_SRC)/include/arch/$(ARCH)/
