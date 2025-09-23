@@ -14,14 +14,12 @@ KERNEL_CC = "${CC} -fuse-ld=bfd"
 DEPENDS = "coqoshv-abi"
 
 SRC_URI = " \
-    file://include;subdir=kernel-module-vchar \
-    file://linux;subdir=kernel-module-vchar \
-    file://common;subdir=kernel-module-vchar \
+    ${PATH_TO_REPO}/vchar-km/.git;protocol=${PROTO};destsuffix=vchar-km;branch=vchar-kernel-module.lnx.1.0 \
 "
 
 SRCREV = "${AUTOREV}"
 
-S = "${WORKDIR}/kernel-module-vchar"
+S = "${WORKDIR}/vchar-km"
 
 EXTRA_OEMAKE += "-C linux COQOSHV_ABI_HEADERS=${STAGING_DIR_HOST}/usr/include/coqoshv-abi-kernel-headers"
 
