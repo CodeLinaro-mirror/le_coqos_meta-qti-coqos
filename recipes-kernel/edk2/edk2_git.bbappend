@@ -13,4 +13,5 @@ SRC_URI += "file://0001-avb-bring-up-keymaster-for-LV.patch \
             file://0011-provide-boot-tamper-state-to-tz.patch \
             file://0012-blow-milestone-fuse.patch \
             file://0013-Store-boot-recovery-wipe-command-for-GVM-in-case-of-.patch \
+            file://0014-QcomModulePkg-Library-BootLib-Disable-dtbo-overlay.patch \
             "
