@@ -9,6 +9,9 @@ require {
     type syslogd_t;
     type etc_t;
     type devlog_t;
+    type init_var_run_t;
+    type dhcpc_port_t;
+    type node_t;
 }
 
 allow systemd_tmpfiles_t tmpfs_t:sock_file { getattr create setattr unlink write};
@@ -25,3 +28,7 @@ allow systemd_coredump_t kernel_t:fifo_file { getattr ioctl read write };
 allow systemd_coredump_t etc_t:file map;
 allow systemd_coredump_t tmpfs_t:filesystem getattr;
 
+allow systemd_networkd_t init_var_run_t:file { read open };
+allow systemd_networkd_t dhcpc_port_t:udp_socket { name_bind };
+allow systemd_networkd_t node_t:udp_socket { node_bind };
+allow systemd_networkd_t systemd_networkd_t:capability { net_bind_service };
