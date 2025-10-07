@@ -4,9 +4,9 @@ inherit packagegroup
 
 PACKAGES = "packagegroup-coqos-base"
 
-# COQOS Trace and device-tree
 RDEPENDS:${PN} += "\
     device-tree \
+    dnsmasq \
     trace-emlog \
     virglrenderer \
     "
