@@ -10,7 +10,7 @@ policy_module(coqos_virtio, 1.0.0)
 
 type coqos_virtio_video_t;
 type coqos_virtio_video_exec_t;
-type opsy_etc_t;
+type qcom_etc_t;
 
 require {
     type default_context_t;
@@ -174,4 +174,4 @@ allow coqos_virtio_video_t systemd_sessions_var_run_t:fifo_file write;
 allow coqos_virtio_video_t tty_device_t:chr_file { getattr ioctl open read write relabelfrom relabelto };
 allow coqos_virtio_video_t user_tty_device_t:chr_file { ioctl relabelfrom relabelto };
 allow coqos_virtio_video_t var_spool_t:dir search;
-allow coqos_virtio_video_t opsy_etc_t:file { getattr open read };
+allow coqos_virtio_video_t qcom_etc_t:file { getattr open read };
