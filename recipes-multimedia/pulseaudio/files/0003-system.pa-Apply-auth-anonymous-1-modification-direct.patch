@@ -1,0 +1,30 @@
+From ee35ae4756a8ba25ab4e465b1eb73e6aff794557 Mon Sep 17 00:00:00 2001
+From: Anandu Sudhakaran <anansudh@qti.qualcomm.com>
+Date: Sun, 27 Mar 2022 23:20:42 +0200
+Subject: [PATCH 3/4] system.pa: Apply 'auth-anonymous=1' modification directly
+ to 'system.pa' template.
+
+The modification for 'auth-anonymous=1' was apparently needed to run
+PulseAudio as system-wide daemon in embedded 'headless' use-case.
+
+Signed-off-by: Anandu Sudhakaran <anansudh@qti.qualcomm.com>
+---
+ src/daemon/system.pa.in | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/daemon/system.pa.in b/src/daemon/system.pa.in
+index b1a4a5c..06aef73 100755
+--- a/src/daemon/system.pa.in
++++ b/src/daemon/system.pa.in
+@@ -44,7 +44,7 @@ load-module module-detect
+ .ifexists module-esound-protocol-unix@PA_SOEXT@
+ load-module module-esound-protocol-unix
+ .endif
+-load-module module-native-protocol-unix
++load-module module-native-protocol-unix auth-anonymous=1
+ 
+ ### Automatically restore the default sink/source when changed by the user
+ ### during runtime
+-- 
+2.35.1
+

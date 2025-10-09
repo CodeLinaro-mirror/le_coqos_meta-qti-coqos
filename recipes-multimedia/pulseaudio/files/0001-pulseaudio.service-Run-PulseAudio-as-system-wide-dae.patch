@@ -1,0 +1,60 @@
+From 01bac8430a3695175bd1ad364597c1c2fd013b33 Mon Sep 17 00:00:00 2001
+From: Anandu Sudhakaran <anansudh@qti.qualcomm.com>
+Date: Sun, 27 Mar 2022 16:44:04 +0200
+Subject: [PATCH 1/4] pulseaudio.service: Run PulseAudio as system-wide daemon.
+
+By default PulseAudio daemon starts as a user service and it can be inited
+only after a user logs in [1]. Coqos-virtio-snd systemd service depends on
+ALSA input/outputs sinks to be ready during initialization:
+
+  ExecStart=/usr/bin/coqos-virtio-snd --coqos-virtio \
+    --sink alsa_output.MultiMedia1 \
+    --source alsa_input.MultiMedia1,channels=2,force_defaults
+
+Since these sinks are ready only after PulseAudio daemon start running
+PulseAudio as a user service causing coqos-virtio-snd initialization error
+and leads to guest VM stuck. Hence to avoid it run PulseAudio as
+system-wide daemon. Due to known caveats with running pulseaudio as a
+system-wide daemon, this change implements a workaround. This solution is
+intended to be temporary and will be revisited in the future.
+
+[1]: https://wiki.archlinux.org/title/PulseAudio#Starting_system-wide_on_boot
+
+Signed-off-by: Anandu Sudhakaran <anansudh@qti.qualcomm.com>
+---
+ src/daemon/systemd/user/pulseaudio.service.in | 17 +++++++----------
+ 1 file changed, 7 insertions(+), 10 deletions(-)
+
+diff --git a/src/daemon/systemd/user/pulseaudio.service.in b/src/daemon/systemd/user/pulseaudio.service.in
+index e00f05b..de19045 100644
+--- a/src/daemon/systemd/user/pulseaudio.service.in
++++ b/src/daemon/systemd/user/pulseaudio.service.in
+@@ -21,18 +21,15 @@ After=sound.target
+ Requires=pulseaudio.socket
+ 
+ [Service]
+-ExecStart=@PA_BINARY@ --daemonize=no
+-LockPersonality=yes
+-MemoryDenyWriteExecute=yes
+-NoNewPrivileges=yes
+-Restart=on-failure
+-RestrictNamespaces=yes
+-SystemCallArchitectures=native
+-SystemCallFilter=@system-service
++ExecStart=@PA_BINARY@ --daemonize=no \
++                      --system \
++                      --exit-idle-time=-1 \
++                      --log-target=journal \
++                      --disallow-exit
+ # Note that notify will only work if --daemonize=no
+ Type=notify
+-UMask=0077
++Restart=always
+ 
+ [Install]
+ Also=pulseaudio.socket
+-WantedBy=default.target
++WantedBy=multi-user.target
+-- 
+2.35.1
+
