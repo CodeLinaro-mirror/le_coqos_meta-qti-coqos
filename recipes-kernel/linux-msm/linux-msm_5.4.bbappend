@@ -37,6 +37,7 @@ SRC_URI += "file://enable_system_listener_qcpe_hos.cfg"
 SRC_URI += "file://enable_vhost_vsock.cfg"
 SRC_URI += "file://enable_vivid.cfg"
 SRC_URI += "file://set_adreno_governor_performance.cfg"
+SRC_URI += "file://disable_msm_console.cfg"
 
 #--------------------------------------------------------------------------------------------
 # Workarounds for applying out-of-tree patches on repositories mapped by repo manifest
