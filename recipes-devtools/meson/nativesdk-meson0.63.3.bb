@@ -1,7 +1,7 @@
 include meson.inc
 
-inherit siteinfo
 inherit nativesdk
+inherit siteinfo
 
 SRC_URI += "file://meson-setup.py \
             file://meson-wrapper"
