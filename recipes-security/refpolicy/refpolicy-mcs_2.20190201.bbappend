@@ -1,5 +1,5 @@
 COQOS_SEPOLICY_DIR := "${THISDIR}"
-CONTRIB_MODULES += " coqos_virtio dnsmasq logging systemd"
+CONTRIB_MODULES += " coqos_virtio dnsmasq logging systemd pulseaudio"
 
 POLICY_MODULES_EXCLUDE += "bluetooth"
 
