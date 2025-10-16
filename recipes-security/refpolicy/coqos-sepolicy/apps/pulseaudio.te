@@ -1,0 +1,17 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+require {
+    type audio_vendor_t;
+    type pulseaudio_t;
+    type pulseaudio_conf_t;
+    class file { getattr open read map };
+    class dir { search };
+    class binder { call };
+    class capability { dac_override dac_read_search};
+}
+
+allow pulseaudio_t audio_vendor_t:binder call;
+allow pulseaudio_t pulseaudio_conf_t:dir search;
+allow pulseaudio_t pulseaudio_conf_t:file { getattr open read map };
+allow pulseaudio_t self:capability { dac_override dac_read_search };
