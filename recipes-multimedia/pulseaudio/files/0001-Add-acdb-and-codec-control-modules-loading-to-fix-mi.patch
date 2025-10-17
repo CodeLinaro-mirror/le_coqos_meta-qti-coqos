@@ -1,0 +1,30 @@
+From 4757b47d1add67c83137a83517369371aa94904c Mon Sep 17 00:00:00 2001
+From: Marcin Mozejko <mmozejko@qti.qualcomm.com>
+Date: Tue, 30 May 2023 10:37:01 +0200
+Subject: [PATCH] Add 'acdb' and 'codec-control' modules loading to fix missing
+ audio on SA8155 ADPAir.
+
+Signed-off-by: Marcin Mozejko <mmozejko@qti.qualcomm.com>
+---
+ src/daemon/system.pa.in | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/src/daemon/system.pa.in b/src/daemon/system.pa.in
+index 06fb415..84a2b91 100755
+--- a/src/daemon/system.pa.in
++++ b/src/daemon/system.pa.in
+@@ -46,6 +46,14 @@ load-module module-esound-protocol-unix
+ .endif
+ load-module module-native-protocol-unix auth-anonymous=1
+ 
++### Automatically load acdb and codec-control modules by QC
++.ifexists module-acdb@PA_SOEXT@
++load-module module-acdb
++.endif
++.ifexists module-codec-control@PA_SOEXT@
++load-module module-codec-control
++.endif
++
+ ### Automatically load agl-audio-plugin module
+ .ifexists agl-audio-plugin@PA_SOEXT@
+ load-module agl-audio-plugin

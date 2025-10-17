@@ -1,0 +1,33 @@
+From 1676f0b1c040523575b0ba5d43d709cb8a81545f Mon Sep 17 00:00:00 2001
+From: Marcin Mozejko <mmozejko@qti.qualcomm.com>
+Date: Wed, 13 Dec 2023 12:19:34 +0100
+Subject: [PATCH] Start pulseaudio after servicemanager initializes
+ '/dev/binder'
+
+Android Binder IPC is used by ACDB loader. We have to wait for it to
+fully initialize to avoid pulseaudio service failure. The easiest way
+to achieve that is to wait until servicemanager is done.
+
+Signed-off-by: Marcin Mozejko <mmozejko@qti.qualcomm.com>
+---
+ src/daemon/systemd/user/pulseaudio.service.in | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/daemon/systemd/user/pulseaudio.service.in b/src/daemon/systemd/user/pulseaudio.service.in
+index c50d98b..841f715 100644
+--- a/src/daemon/systemd/user/pulseaudio.service.in
++++ b/src/daemon/systemd/user/pulseaudio.service.in
+@@ -18,6 +18,10 @@ Description=Sound Service
+ Requires=sound.target
+ After=sound.target
+ 
++# Wait for /dev/binder
++Requires=servicemanager.service
++After=servicemanager.service
++
+ [Service]
+ ExecStart=@PA_BINARY@ --daemonize=no \
+                       --system \
+-- 
+2.42.0
+
