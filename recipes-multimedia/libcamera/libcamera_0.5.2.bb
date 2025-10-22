@@ -15,6 +15,7 @@ SRC_URI = " \
     file://0003-Backport-vivid-pipeline-support-into-v0.5.2.patch \
     file://0004-libcamera-pipeline-vivid-Add-support-of-multiple-cap.patch \
     file://0005-libcamera-pipeline-vivid-Fix-format-config-validatio.patch \
+    file://0006-libcamera-base-semaphore-Do-not-unlock-prematurely.patch \
 "
 
 SRCREV = "aa0a91c48ddb38c302390d5c4899cb9e093ddd24"
