@@ -8,6 +8,7 @@ RDEPENDS:${PN} += "\
     device-tree \
     dnsmasq \
     trace-emlog \
+    trace-cmd \
     virglrenderer \
     "
 
