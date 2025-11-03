@@ -32,7 +32,7 @@ EXTRA_OEMAKE = "'BOOTLOADER_OUT=${S}/out' \
                 'BOARD_BOOTLOADER_PRODUCT_NAME=gull' \
                 'TARGET_ARCHITECTURE=AARCH64' \
                 'VERIFIED_BOOT_LE=0' \
-                'VERIFIED_BOOT_ENABLED=0' \
+                'VERIFIED_BOOT_ENABLED=1' \
                 'AB_RETRYCOUNT_DISABLE=0' \
                 'TARGET_BOARD_TYPE_AUTO=1' \
                 'USER_BUILD_VARIANT=0' \
