@@ -1,0 +1,31 @@
+From 648acf351b1020271b9c9b6fef8ba40b64dca163 Mon Sep 17 00:00:00 2001
+From: Anandu Sudhakaran <anansudh@qti.qualcomm.com>
+Date: Thu, 16 Oct 2025 13:36:18 +0200
+Subject: [PATCH] pulseaudio.service: Enable all Audio TDM paths before
+ starting PulseAudio
+
+Ensure all Audio TDM paths are enabled before starting pulseaudio when
+running as a system-wide daemon.
+
+Change-Id: Idcf197739d44411b1f7b83e3b401f292b91c47c8
+Signed-off-by: Anandu Sudhakaran <anansudh@qti.qualcomm.com>
+---
+ src/daemon/systemd/user/pulseaudio.service.in | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/daemon/systemd/user/pulseaudio.service.in b/src/daemon/systemd/user/pulseaudio.service.in
+index 841f715..429b946 100644
+--- a/src/daemon/systemd/user/pulseaudio.service.in
++++ b/src/daemon/systemd/user/pulseaudio.service.in
+@@ -23,6 +23,8 @@ Requires=servicemanager.service
+ After=servicemanager.service
+ 
+ [Service]
++#Enable All Audio TDM Paths
++ExecStartPre=/usr/bin/audio-nxp-auto 0
+ ExecStart=@PA_BINARY@ --daemonize=no \
+                       --system \
+                       --exit-idle-time=-1 \
+-- 
+2.49.0
+

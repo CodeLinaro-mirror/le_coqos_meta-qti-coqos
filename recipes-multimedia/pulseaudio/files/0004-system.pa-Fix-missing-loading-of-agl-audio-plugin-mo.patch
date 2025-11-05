@@ -1,0 +1,33 @@
+From dd31a73039ffdf34cf8c937060db53f9d8ba1308 Mon Sep 17 00:00:00 2001
+From: Anandu Sudhakaran <anansudh@qti.qualcomm.com>
+Date: Tue, 29 Mar 2022 13:17:34 +0200
+Subject: [PATCH 4/4] system.pa: Fix missing loading of agl-audio-plugin module
+ in system mode.
+
+This change ensures that the agl-audio-plugin module is loaded when pulseaudio
+is running in system mode.
+
+Signed-off-by: Anandu Sudhakaran <anansudh@qti.qualcomm.com>
+---
+ src/daemon/system.pa.in | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/daemon/system.pa.in b/src/daemon/system.pa.in
+index 06aef73..06fb415 100755
+--- a/src/daemon/system.pa.in
++++ b/src/daemon/system.pa.in
+@@ -46,6 +46,11 @@ load-module module-esound-protocol-unix
+ .endif
+ load-module module-native-protocol-unix auth-anonymous=1
+ 
++### Automatically load agl-audio-plugin module
++.ifexists agl-audio-plugin@PA_SOEXT@
++load-module agl-audio-plugin
++.endif
++
+ ### Automatically restore the default sink/source when changed by the user
+ ### during runtime
+ ### NOTE: This should be loaded as early as possible so that subsequent modules
+-- 
+2.35.1
+
