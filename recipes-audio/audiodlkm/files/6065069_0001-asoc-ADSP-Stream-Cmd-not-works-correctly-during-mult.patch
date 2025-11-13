@@ -1,0 +1,53 @@
+From 7773e0dc1e089ed53799a4d937d224d3e64bdc27 Mon Sep 17 00:00:00 2001
+From: Ryo Nakagawa <quic_rnakagaw@quicinc.com>
+Date: Mon, 9 Jun 2025 20:11:35 +0900
+Subject: [PATCH] asoc: 'ADSP Stream Cmd' not works correctly during multiple
+ playback session
+
+Change-Id: I2f16b259a09f0e06988b8b8c450541099836e0b7
+Signed-off-by: Ryo Nakagawa <quic_rnakagaw@quicinc.com>
+---
+ asoc/msm-pcm-q6-v2.c | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/asoc/msm-pcm-q6-v2.c b/asoc/msm-pcm-q6-v2.c
+index 85e6aaf1f..0174ef42f 100644
+--- a/asoc/msm-pcm-q6-v2.c
++++ b/asoc/msm-pcm-q6-v2.c
+@@ -1651,9 +1651,16 @@ static int msm_pcm_adsp_stream_cmd_put(struct snd_kcontrol *kcontrol,
+ 	struct msm_plat_data *pdata = NULL;
+ 	struct snd_pcm_substream *substream;
+ 	struct msm_audio *prtd;
++	struct snd_pcm *pcm = NULL;
+ 	int ret = 0;
+ 	struct msm_adsp_event_data *event_data = NULL;
+ 
++	unsigned long fe_id = kcontrol->private_value & 0xFF;
++	if (fe_id >= MSM_FRONTEND_DAI_MAX) {
++		pr_err("%s Received invalid fe_id %d\n", __func__, fe_id);
++		return -EINVAL;
++	}
++
+ 	if (!component) {
+ 		pr_err("%s: component is NULL\n", __func__);
+ 		return -EINVAL;
+@@ -1666,7 +1673,15 @@ static int msm_pcm_adsp_stream_cmd_put(struct snd_kcontrol *kcontrol,
+ 	}
+ 
+ 	mutex_lock(&pdata->lock);
+-	substream = pdata->pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream;
++	pcm = pdata->pcm_device[fe_id];
++	if (!pcm) {
++		pr_err("%s invalid pcm handle for fe_id %d\n", __func__, fe_id);
++		ret = -EINVAL;
++		goto done;
++	}
++
++	substream = pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream;
++
+ 	if (!substream) {
+ 		pr_err("%s substream not found\n", __func__);
+ 		ret = -EINVAL;
+-- 
+2.49.0
+
