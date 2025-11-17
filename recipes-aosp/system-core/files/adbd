@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+# Define product information
+PRODUCT_NAME=gen3_pvm_coqos
+PRODUCT_MODEL=gen3_pvm_coqos_for_arm64
+PRODUCT_DEVICE=gen3_pvm_coqos
+
+# Set properties read by adbd for connection string creation
+/usr/bin/setprop ro.product.name ${PRODUCT_NAME}
+/usr/bin/setprop ro.product.model ${PRODUCT_MODEL}
+/usr/bin/setprop ro.product.device ${PRODUCT_DEVICE}
