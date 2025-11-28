@@ -3,9 +3,11 @@
 
 require {
         type gstreamer_lib_t;
+	type gstreamer_etc_t;
         type unconfined_t;
         class file { getattr map open read execute };
 }
 
 #============= unconfined_t ==============
 allow unconfined_t gstreamer_lib_t:file { getattr map open read execute };
+allow unconfined_t gstreamer_etc_t:file { getattr open read };
