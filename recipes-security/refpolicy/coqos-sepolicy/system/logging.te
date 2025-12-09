@@ -3,6 +3,12 @@
 
 require {
     type qseecomd_t;
+    type qseecomd_persist_t;
+
+    class file { read write rename };
+    class dir { read write add_name remove_name };
 }
 
 allow syslogd_t qseecomd_t:process signull;
+allow qseecomd_t qseecomd_persist_t:file { read write rename };
+allow qseecomd_t qseecomd_persist_t:dir { read write add_name remove_name };
