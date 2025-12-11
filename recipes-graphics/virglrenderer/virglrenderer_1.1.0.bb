@@ -24,7 +24,7 @@ S = "${WORKDIR}/external/virglrenderer"
 inherit meson pkgconfig features_check
 
 DEPENDS_remove = " meson-native"
-DEPENDS_append = " meson0.57.1-native"
+DEPENDS_append = " meson0.63.3-native"
 
 BBCLASSEXTEND = "native nativesdk"
 
