@@ -25,6 +25,7 @@ SRC_URI += "file://0004-msm-ais-v4l2_v2-Introduce-dmabuf-import-support.patch;pa
 #--------------------------------------------------------------------------------------------
 # Put kernel config fragments here:
 #--------------------------------------------------------------------------------------------
+SRC_URI += "file://disable_hibernation.cfg"
 SRC_URI += "file://disable_kernel_unmap.cfg"
 SRC_URI += "file://disable_module_sig.cfg"
 SRC_URI += "file://enable_coresight-tmc.cfg"
