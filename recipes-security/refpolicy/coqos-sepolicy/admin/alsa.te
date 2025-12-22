@@ -1,0 +1,18 @@
+# Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+
+require {
+        type user_runtime_t;
+        type pulseaudio_t;
+        type pulseaudio_var_run_t;
+        type alsa_t;
+        class dir { search read write add_name create };
+        class sock_file write;
+        class unix_stream_socket connectto;
+}
+
+#============= alsa_t ==============
+allow alsa_t pulseaudio_t:unix_stream_socket connectto;
+allow alsa_t pulseaudio_var_run_t:dir search;
+allow alsa_t pulseaudio_var_run_t:sock_file write;
+allow alsa_t user_runtime_t:dir { read write add_name create };
