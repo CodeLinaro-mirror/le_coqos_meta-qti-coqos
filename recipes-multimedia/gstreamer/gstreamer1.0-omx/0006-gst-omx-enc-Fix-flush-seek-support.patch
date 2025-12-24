@@ -1,0 +1,118 @@
+From a5b8193669a68ca07adf08ae3edd7a0f4f188c4a Mon Sep 17 00:00:00 2001
+From: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+Date: Sat, 24 May 2025 23:24:10 +0200
+Subject: [PATCH 2/3] gst-omx: enc: Fix flush/seek support.
+
+* Support FLUSH_START event: set in/out ports to flushing state in the
+event handler and wait until the main loop thread is stopped.
+* Do not go to OMX Paused state in `gst_omx_video_enc_flush()`. SA8155
+OMX encoder cannot complete flush in this state and fails on timeout.
+
+Signed-off-by: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+---
+ omx/gstomxvideoenc.c | 54 ++++++++++++++++++++++++++++++++++----------
+ 1 file changed, 42 insertions(+), 12 deletions(-)
+
+diff --git a/omx/gstomxvideoenc.c b/omx/gstomxvideoenc.c
+index a6442bc..2bd0fea 100755
+--- a/omx/gstomxvideoenc.c
++++ b/omx/gstomxvideoenc.c
+@@ -485,6 +485,8 @@ static GstFlowReturn gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
+ static gboolean gst_omx_video_enc_finish (GstVideoEncoder * encoder);
+ static gboolean gst_omx_video_enc_propose_allocation (GstVideoEncoder * encoder,
+     GstQuery * query);
++static gboolean
++gst_omx_video_enc_sink_event (GstVideoEncoder * encoder, GstEvent * event);
+ static GstCaps *gst_omx_video_enc_getcaps (GstVideoEncoder * encoder,
+     GstCaps * filter);
+ static gboolean gst_omx_video_enc_decide_allocation (GstVideoEncoder * encoder,
+@@ -945,6 +947,8 @@ gst_omx_video_enc_class_init (GstOMXVideoEncClass * klass)
+   video_encoder_class->finish = GST_DEBUG_FUNCPTR (gst_omx_video_enc_finish);
+   video_encoder_class->propose_allocation =
+       GST_DEBUG_FUNCPTR (gst_omx_video_enc_propose_allocation);
++  video_encoder_class->sink_event =
++      GST_DEBUG_FUNCPTR (gst_omx_video_enc_sink_event);
+   video_encoder_class->getcaps = GST_DEBUG_FUNCPTR (gst_omx_video_enc_getcaps);
+   video_encoder_class->decide_allocation =
+       GST_DEBUG_FUNCPTR (gst_omx_video_enc_decide_allocation);
+@@ -2429,7 +2433,10 @@ gst_omx_video_enc_loop (GstOMXVideoEnc * self)
+       if (buf)
+         gst_omx_port_release_buffer (self->enc_out_port, buf);
+       GST_VIDEO_ENCODER_STREAM_UNLOCK (self);
+-      goto caps_failed;
++      if (GST_PAD_IS_FLUSHING (GST_VIDEO_ENCODER_SRC_PAD (self)))
++        goto flushing;
++      else
++        goto caps_failed;
+     }
+ 
+     GST_VIDEO_ENCODER_STREAM_UNLOCK (self);
+@@ -3424,12 +3431,6 @@ gst_omx_video_enc_flush (GstVideoEncoder * encoder)
+   if (gst_omx_component_get_state (self->enc, 0) == OMX_StateLoaded)
+     return TRUE;
+ 
+-  /* 0) Pause the components */
+-  if (gst_omx_component_get_state (self->enc, 0) == OMX_StateExecuting) {
+-    gst_omx_component_set_state (self->enc, OMX_StatePause);
+-    gst_omx_component_get_state (self->enc, GST_CLOCK_TIME_NONE);
+-  }
+-
+   /* 1) Flush the ports */
+   GST_DEBUG_OBJECT (self, "flushing ports");
+   gst_omx_port_set_flushing (self->enc_in_port, 5 * GST_SECOND, TRUE);
+@@ -3443,11 +3444,7 @@ gst_omx_video_enc_flush (GstVideoEncoder * encoder)
+   GST_PAD_STREAM_UNLOCK (GST_VIDEO_ENCODER_SRC_PAD (self));
+   GST_VIDEO_ENCODER_STREAM_LOCK (self);
+ 
+-  /* 3) Resume components */
+-  gst_omx_component_set_state (self->enc, OMX_StateExecuting);
+-  gst_omx_component_get_state (self->enc, GST_CLOCK_TIME_NONE);
+-
+-  /* 4) Unset flushing to allow ports to accept data again */
++  /* 2) Unset flushing to allow ports to accept data again */
+   gst_omx_port_set_flushing (self->enc_in_port, 5 * GST_SECOND, FALSE);
+   gst_omx_port_set_flushing (self->enc_out_port, 5 * GST_SECOND, FALSE);
+   gst_omx_port_populate (self->enc_out_port);
+@@ -4424,6 +4421,39 @@ gst_omx_video_enc_propose_allocation (GstVideoEncoder * encoder,
+       (gst_omx_video_enc_parent_class)->propose_allocation (encoder, query);
+ }
+ 
++static gboolean
++gst_omx_video_enc_sink_event (GstVideoEncoder * encoder, GstEvent * event)
++{
++  GstOMXVideoEnc *self = GST_OMX_VIDEO_ENC (encoder);
++  gboolean ret;
++  GstEventType type = GST_EVENT_TYPE (event);
++
++  switch (type) {
++    case GST_EVENT_FLUSH_START:
++      GST_DEBUG_OBJECT (self, "flush start");
++      gst_omx_port_set_flushing (self->enc_in_port, 5 * GST_SECOND, TRUE);
++      gst_omx_port_set_flushing (self->enc_out_port, 5 * GST_SECOND, TRUE);
++      break;
++    default:
++      break;
++  }
++
++  ret =
++      GST_VIDEO_ENCODER_CLASS (gst_omx_video_enc_parent_class)->sink_event
++      (encoder, event);
++
++  switch (type) {
++    case GST_EVENT_FLUSH_START:
++      gst_pad_stop_task (GST_VIDEO_ENCODER_SRC_PAD (encoder));
++      GST_DEBUG_OBJECT (self, "flush start done");
++      break;
++    default:
++      break;
++  }
++
++  return ret;
++}
++
+ static GList *
+ filter_supported_formats (GList * negotiation_map)
+ {
+-- 
+2.49.0
+
