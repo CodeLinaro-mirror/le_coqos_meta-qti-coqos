@@ -1,0 +1,46 @@
+From 11a974d18d614541463d6df245dd5f72a73548e3 Mon Sep 17 00:00:00 2001
+From: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+Date: Sat, 24 May 2025 23:24:10 +0200
+Subject: [PATCH 1/3] gst-omx: dec: Fix memory leaks.
+
+Fix some memory leaks discovered during runtime memory leak
+analysis via valgrind.
+
+Signed-off-by: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+---
+ omx/gstomxvideodec.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/omx/gstomxvideodec.c b/omx/gstomxvideodec.c
+index 035c57e..c24203b 100644
+--- a/omx/gstomxvideodec.c
++++ b/omx/gstomxvideodec.c
+@@ -629,7 +629,9 @@ gst_omx_video_dec_open (GstVideoDecoder * decoder)
+ 
+   GstCaps *caps;
+ 
++  // Is this call even needed?
+   caps = gst_video_decoder_proxy_getcaps (decoder, NULL, NULL);
++  gst_caps_unref(caps);
+ 
+   if (self->secure) {
+     if (!strncmp(klass->cdata.component_name, "OMX.qcom.video.decoder.avc",
+@@ -4175,6 +4177,7 @@ _get_gst_buffer_from_last_buffer (GstOMXVideoDec * self)
+     GST_ERROR_OBJECT (self, "Add ion/gbm GstVideoMeta failed for gstbuf %p!", buf);
+   }
+ 
++  gst_video_codec_state_unref (state);
+   return buf;
+ 
+ invalid_meta:
+@@ -4187,6 +4190,7 @@ creation_fail:
+ alloc_fail:
+   munmap (data, pPMEMInfo->size);
+ map_fail:
++  gst_video_codec_state_unref (state);
+   return NULL;
+ }
+ 
+-- 
+2.49.0
+

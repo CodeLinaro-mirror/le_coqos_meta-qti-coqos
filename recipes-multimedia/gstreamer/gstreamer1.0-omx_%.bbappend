@@ -1,0 +1,5 @@
+FILESEXTRAPATHS_append := ":${THISDIR}/${PN}"
+
+SRC_URI_append = " file://0005-gst-omx-dec-Fix-memory-leaks.patch"
+SRC_URI_append = " file://0006-gst-omx-enc-Fix-flush-seek-support.patch"
+SRC_URI_append = " file://0007-gst-omx-dec-Fix-flush-seek-support.patch"
