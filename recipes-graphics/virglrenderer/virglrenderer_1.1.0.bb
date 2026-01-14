@@ -14,24 +14,12 @@ DEPENDS = "libdrm virtual/libgles2 virtual/libgbm libepoxy gbm gbm-headers glib-
 DEPENDS_remove_class-native = "virtual/libgles2"
 DEPENDS_append_class-native = " virtual/libgl"
 
-# Upstream repository; commit which carries the 1.1.0 tag
-SRCREV = "1aeaf5e10a9c89096e96d09599aa419d5c50712f"
+SRCREV = "${AUTOREV}"
 SRC_URI = " \
-    git://git@gitlab.freedesktop.org/virgl/virglrenderer.git;protocol=ssh;nobranch=1;rebaseable=1 \
-    file://0001-include-missing-glgeterror-in-format-check.patch \
-    file://0002-vrend-define-missing-gbm-formats.patch \
-    file://0003-workaround-for-ucompare-shader-compiler-bug.patch \
-    file://0004-workaround-disable-dual-src-blend.patch \
-    file://0005-vrend_renderer-Emulate-OpenGL-Transform-Feedback-adv.patch \
-    file://0006-Revert-523796808ae9de6f8fc778a2f5599a8314989189-vren.patch \
-    file://0007-shader-Avoid-requiring-GL_EXT_texture_shadow_lod-if-.patch \
-    file://0008-vrend-renderer-disable-feat_egl_image_storage.patch \
-    file://0009-Unconditionally-use-glClearBufferXXX-instead-of-glCl-1.patch \
-    file://0012-virgl-Implement-API-to-attach-dmabuf-backing-for-cla.patch \
-    file://0013-Add-rgba-resources-backed-by-EGL-image-as-not-suppor.patch \
+    ${PATH_TO_REPO}/external/virglrenderer/.git;protocol=${PROTO};destsuffix=external/virglrenderer \
 "
 
-S = "${WORKDIR}/git"
+S = "${WORKDIR}/external/virglrenderer"
 
 inherit meson pkgconfig features_check
 
