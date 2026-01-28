@@ -1,0 +1,32 @@
+From 9fa60592db9de18dfc4a402230f37c9d6aca290c Mon Sep 17 00:00:00 2001
+From: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+Date: Tue, 14 Oct 2025 11:10:02 +0200
+Subject: [PATCH 1/5] libcamera: process: Fix compilation for some aarch64
+ BSPs.
+
+This is a dirty fix for some aarch64 BSPs that have support for clone3
+syscall but don't have the __ARCH_WANT_SYS_CLONE3 define in sysroot.
+
+Signed-off-by: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+---
+ src/libcamera/process.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/libcamera/process.cpp b/src/libcamera/process.cpp
+index 3090d756..fad295fc 100644
+--- a/src/libcamera/process.cpp
++++ b/src/libcamera/process.cpp
+@@ -5,6 +5,10 @@
+  * Process object
+  */
+ 
++#ifndef __ARCH_WANT_SYS_CLONE3
++#define __ARCH_WANT_SYS_CLONE3
++#endif
++
+ #include "libcamera/internal/process.h"
+ 
+ #include <algorithm>
+-- 
+2.49.0
+
