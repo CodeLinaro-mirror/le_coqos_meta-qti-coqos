@@ -24,6 +24,9 @@ S = "${WORKDIR}/${REPO_NAME}"
 TOOLCHAIN = "clang"
 LINUX_LOADER_ARTIFACT = "LinuxLoader.efi"
 
+# Set FIXED_DEBUG_PRINT_LEVEL to 0 if DISTRO_FEATURES silent is enabled, 0xffffffff otherwise.
+FIXED_DEBUG_PRINT_LEVEL = "${@bb.utils.contains('DISTRO_FEATURES', 'silent', '0x0', '0xffffffff', d)}"
+
 EXTRA_OEMAKE = "'BOOTLOADER_OUT=${S}/out' \
                 'PREBUILT_HOST_TOOLS=BUILD_CC=clang' \
                 'BUILD_CXX=clang++' \
@@ -42,6 +45,7 @@ EXTRA_OEMAKE = "'BOOTLOADER_OUT=${S}/out' \
                 'BASE_ADDRESS=0x80000000' \
                 'HOS_VIRT=1' \
                 'HOS_VIRT_DTB_OVERLAY_ENABLED=1' \
+                'FIXED_DEBUG_PRINT_LEVEL=${FIXED_DEBUG_PRINT_LEVEL}' \
                 'CLANG_BIN=${STAGING_DIR_NATIVE}/usr/share/android-clang-prebuilt-native/bin/' "
 
 do_compile () {
