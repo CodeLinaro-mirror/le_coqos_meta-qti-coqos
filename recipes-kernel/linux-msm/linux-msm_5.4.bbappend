@@ -15,6 +15,7 @@ SRC_URI += "file://0009-Add-kernel-patch-to-measure-blocking-time-for-atomic.pat
 SRC_URI += "file://0010-boot_stats-Add-State-Manager-KPI-markers.patch"
 SRC_URI += "file://0011-tz_log-Register-hyp-related-nodes-only-if-related-co.patch"
 SRC_URI += "file://0012-qcom_scm-coqoshv-Initialize-SCM-before-entering-atom.patch"
+SRC_URI += "file://0001-msm-geni-se-Add-state-checks-before-clock-operations.patch"
 
 # v4l2loopback support for libcamera
 SRC_URI += "file://0001-msm-ais-v4l2_v2-Add-media-subsystem-support.patch;patchdir=techpack/ais"
