@@ -1,0 +1,82 @@
+From 0a039b4353d4e35058ca7ae24dbe85008eff6550 Mon Sep 17 00:00:00 2001
+From: Pavlo Kandrin <pkandrin@qti.qualcomm.com>
+Date: Thu, 5 Feb 2026 11:01:03 +0100
+Subject: [PATCH] msm-geni-se: Add state checks before clock operations
+
+Replace bulk clock operations with individual clock handling that
+checks current state before enabling/disabling. This prevents
+redundant clock operations that trigger kernel warnings like
+"scc_qupv3_2xcore_clk already unprepared".
+
+The change:
+- Switches from clk_bulk_* API to individual clock operations
+- Adds __clk_is_enabled() checks before each operation
+- Maintains error handling for failed clock enables
+
+This addresses warnings seen during suspend operation while
+preserving the clock reference counting behavior.
+
+Change-Id: I35bce6f34bc16d57b6ed15b3be4f6cbcf95d0fda
+---
+ drivers/platform/msm/msm-geni-se.c | 34 ++++++++++++++++++------------
+ 1 file changed, 21 insertions(+), 13 deletions(-)
+
+diff --git a/drivers/platform/msm/msm-geni-se.c b/drivers/platform/msm/msm-geni-se.c
+index 853829483ef1..c7bdabe5628d 100755
+--- a/drivers/platform/msm/msm-geni-se.c
++++ b/drivers/platform/msm/msm-geni-se.c
+@@ -5,6 +5,7 @@
+  */
+ 
+ #include <linux/clk.h>
++#include <linux/clk-provider.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/ipc_logging.h>
+ #include <linux/io.h>
+@@ -365,23 +366,30 @@ static DEVICE_ATTR_RO(ssc_qup_state);
+ static void geni_se_ssc_clk_on(struct geni_se_device *dev, bool enable)
+ {
+ 	int ret = 0;
++	int i = 0;
+ 
+ 	if (!dev)
+ 		return;
+ 
+-	if (enable) {
+-		/* Enable core and core2x clock */
+-		ret = clk_bulk_prepare_enable(SSC_NUM_CLKS, dev->ssc_clks);
+-		if (ret) {
+-			GENI_SE_ERR(dev->log_ctx, false, NULL,
+-				"%s: corex/2x clk enable failed ret:%d\n",
+-						__func__, ret);
+-			return;
+-		}
+-	} else {
+-		/* Disable core and core2x clk */
+-		clk_bulk_disable_unprepare(SSC_NUM_CLKS, dev->ssc_clks);
+-	}
++    if (enable) {
++        /* Enable core and core2x clock */
++        for (i = 0; i < SSC_NUM_CLKS; i++)
++            if (!__clk_is_enabled(dev->ssc_clks[i].clk)) {
++                ret = clk_prepare_enable(dev->ssc_clks[i].clk);
++
++                if (ret) {
++                    GENI_SE_ERR(dev->log_ctx, false, NULL,
++                            "%s: corex/2x clk enable failed ret:%d\n",
++                                            __func__, ret);
++                    return;
++                }
++            }
++    } else {
++        /* Disable core and core2x clk */
++        for (i = 0; i < SSC_NUM_CLKS; i++)
++            if (__clk_is_enabled(dev->ssc_clks[i].clk))
++                clk_disable_unprepare(dev->ssc_clks[i].clk);
++    }
+ }
+ 
+ /*
+-- 
+2.49.0
+
