@@ -34,4 +34,6 @@ REQUIRED_DISTRO_FEATURES_class-nativesdk = ""
 
 EXTRA_OEMESON:append = " \
             -Dplatforms=egl \
+            -Dvenus=true \
+            -Dvenus-validate=true \
             "
