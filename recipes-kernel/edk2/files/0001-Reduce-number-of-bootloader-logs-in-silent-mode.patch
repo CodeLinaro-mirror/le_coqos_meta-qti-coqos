@@ -1,0 +1,53 @@
+From 02618169d000fe4d6a12ed9fbdd2aa37e534a496 Mon Sep 17 00:00:00 2001
+From: "yurii.homza" <yhomza@qti.qualcomm.com>
+Date: Fri, 6 Feb 2026 02:04:43 +0100
+Subject: [PATCH] Reduce number of bootloader logs in silent mode
+
+Change native bootloader print level based on DISTRO_FEATURES. If the feature
+is " silent", it will set mask to print less logs to the console.
+
+Issue: EUVLINUX-367
+Change-Id: I8386ee55157ea3c044cacfea789642350d7652e2
+---
+ MdePkg/MdePkg.dec               | 4 ++--
+ QcomModulePkg/QcomModulePkg.dsc | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/MdePkg/MdePkg.dec b/MdePkg/MdePkg.dec
+index 337059a6a..627ffb45a 100644
+--- a/MdePkg/MdePkg.dec
++++ b/MdePkg/MdePkg.dec
+@@ -1842,7 +1842,7 @@
+   #  BIT22 - Detailed debug message.<BR>
+   #  BIT31 - Error message.<BR>
+   # @Prompt Fixed Debug Message Print Level.
+-  gEfiMdePkgTokenSpaceGuid.PcdFixedDebugPrintErrorLevel|0xFFFFFFFF|UINT32|0x30001016
++  gEfiMdePkgTokenSpaceGuid.PcdFixedDebugPrintErrorLevel|0x0|UINT32|0x30001016
+ 
+ [PcdsFixedAtBuild,PcdsPatchableInModule]
+   ## Indicates the maximum length of unicode string used in the following
+@@ -1911,7 +1911,7 @@
+   #  BIT31 - Error message.<BR>
+   # @Prompt Debug Message Print Level.
+   # @Expression  0x80000002 | (gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel & 0x7F84AA00) == 0
+-  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80000000|UINT32|0x00000006
++  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x00000000|UINT32|0x00000006
+ 
+   ## The mask is used to control ReportStatusCodeLib behavior.<BR><BR>
+   #  BIT0 - Enable Progress Code.<BR>
+diff --git a/QcomModulePkg/QcomModulePkg.dsc b/QcomModulePkg/QcomModulePkg.dsc
+index 22b791951..436f28ee5 100644
+--- a/QcomModulePkg/QcomModulePkg.dsc
++++ b/QcomModulePkg/QcomModulePkg.dsc
+@@ -218,7 +218,7 @@
+   !elseif $(USER_BUILD_VARIANT) == 0
+ 	gEfiMdePkgTokenSpaceGuid.PcdDebugPropertyMask|0x2f
+   !endif
+-  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x80000042
++  gEfiMdePkgTokenSpaceGuid.PcdDebugPrintErrorLevel|0x00000000
+   gEfiMdePkgTokenSpaceGuid.PcdReportStatusCodePropertyMask|0x06
+   gQcomTokenSpaceGuid.EnableDisplayMenu|$(ENABLE_DISPLAY_MENU)
+ 
+-- 
+2.25.1
+
