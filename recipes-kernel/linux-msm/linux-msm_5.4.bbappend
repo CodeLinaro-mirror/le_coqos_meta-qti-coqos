@@ -23,6 +23,9 @@ SRC_URI += "file://0002-msm-ais-v4l2_v2-Fix-v4l2-capabilities-query-ioctl.patch;
 SRC_URI += "file://0003-msm-ais-v4l2_v2-Send-AIS_V4L2_OPEN_INPUT-command-onl.patch;patchdir=techpack/ais"
 SRC_URI += "file://0004-msm-ais-v4l2_v2-Introduce-dmabuf-import-support.patch;patchdir=techpack/ais"
 
+# set appropriate log level for pci msm driver
+SRC_URI += "file://0001-pci-msm-replace-usage-of-pr_alert-macro-with-pr_info.patch"
+
 #--------------------------------------------------------------------------------------------
 # Put kernel config fragments here:
 #--------------------------------------------------------------------------------------------

@@ -1,0 +1,33 @@
+From 41a44b0bcf863252de92512586cb31eb443497c1 Mon Sep 17 00:00:00 2001
+From: "yurii.homza" <yhomza@qti.qualcomm.com>
+Date: Wed, 4 Feb 2026 08:35:44 +0100
+Subject: [PATCH] pci-msm: replace usage of pr_alert() macro with pr_info()
+
+The pr_alert() macro is used in case where there is no indication
+of alert, creating additional latency for console output when alert
+message is generated.
+
+Switched to pr_info() macro as more appropriate.
+
+Issue: EUVLINUX-314
+Change-Id: Iadf191278fea738f27961059affad3c3f4f4e0e4
+---
+ drivers/pci/controller/pci-msm.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/pci/controller/pci-msm.c b/drivers/pci/controller/pci-msm.c
+index 5dfcdc21474c..349672baf8a4 100644
+--- a/drivers/pci/controller/pci-msm.c
++++ b/drivers/pci/controller/pci-msm.c
+@@ -7312,7 +7312,7 @@ static int __init pcie_init(void)
+ {
+ 	int ret = 0, i;
+ 
+-	pr_alert("pcie:%s.\n", __func__);
++	pr_info("pcie:%s.\n", __func__);
+ 
+ 	pcie_drv.rc_num = 0;
+ 	mutex_init(&pcie_drv.drv_lock);
+-- 
+2.25.1
+
