@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 /*
- * Copyright (c) 2025 Qualcomm Technologies, Inc. All rights reserved.
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
  */
 
 /* Mimic DT as patched by EDK2 */
 
 #include "sa8155p-v2-adp-air.dts"
+#include "sa8155p-adp-air-split-drm.dtsi"
 
 / {
 	/*

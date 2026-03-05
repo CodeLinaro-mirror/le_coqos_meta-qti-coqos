@@ -18,4 +18,5 @@ COMPATIBLE_MACHINE_sa81x5 = ".*"
 SRC_URI_${BASEMACHINE} = " \
     file://sa8155p-adp-air-initial.dts \
     file://sa8155p-minic-edk2.dtsi \
+    file://sa8155p-adp-air-split-drm.dtsi \
     "

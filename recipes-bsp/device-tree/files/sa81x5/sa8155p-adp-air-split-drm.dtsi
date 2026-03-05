@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: BSD-3-Clause
+/*
+ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ */
+
+&soc {
+	sde_sh_base_dsi_1: qcom,shared-display-base@0 {
+		qcom,shared-display-base-connector = "DSI-1";
+	};
+
+	sde_sh_weston_dsi_1: qcom,shared-display@0 {
+		compatible = "qcom,shared-display";
+		qcom,shared-display-base = <&sde_sh_base_dsi_1>;
+		qcom,blend-stage-range = <0 11>;
+		qcom,shared-display-name = "shared-disp-weston-dsi-1";
+	};
+
+	sde_sh_base_dsi_2: qcom,shared-display-base@1 {
+		qcom,shared-display-base-connector = "DSI-2";
+	};
+
+	sde_sh_drm_dsi_2: qcom,shared-display@1 {
+		compatible = "qcom,shared-display";
+		qcom,shared-display-base = <&sde_sh_base_dsi_2>;
+		qcom,blend-stage-range = <0 11>;
+		qcom,shared-display-name = "shared-disp-drm-dsi-2";
+	};
+
+	sde_sh_base_dp_1: qcom,shared-display-base@2 {
+		qcom,shared-display-base-connector = "DP-1";
+	};
+
+	sde_sh_drm_dp_1: qcom,shared-display@2 {
+		compatible = "qcom,shared-display";
+		qcom,shared-display-base = <&sde_sh_base_dp_1>;
+		qcom,blend-stage-range = <0 11>;
+		qcom,shared-display-name = "shared-disp-drm-dp-1";
+	};
+
+	sde_card_weston: qcom,sde-kms-lease@0 {
+		compatible = "qcom,sde-kms-lease";
+		qcom,dev-name = "msm_drm";
+		qcom,lease-connectors = "shared-disp-weston-dsi-1";
+		qcom,lease-planes = "plane-0", "plane-1", "plane-2", "plane-3", "plane-12", "plane-13", "plane-14", "plane-15";
+	};
+
+	sde_card_virtio: qcom,sde-kms-lease@1 {
+		compatible = "qcom,sde-kms-lease";
+		qcom,dev-name = "msm_drm2";
+		qcom,lease-connectors = "shared-disp-drm-dsi-2", "shared-disp-drm-dp-1";
+		qcom,lease-planes = "plane-4", "plane-5", "plane-6", "plane-7", "plane-8", "plane-9", "plane-10", "plane-11";
+	};
+};
+
+/* display connectors */
+&mdss_mdp {
+	qcom,sde-reg-dma-version = <0>;
+	connectors = <&dsi_dp1 &dsi_dp2 &sde_dp &sde_wb
+			&sde_sh_weston_dsi_1
+			&sde_sh_drm_dsi_2
+			&sde_sh_drm_dp_1
+			&sde_card_weston &sde_card_virtio>;
+
+	/delete-property/qcom,sde-has-dest-scaler;
+};
