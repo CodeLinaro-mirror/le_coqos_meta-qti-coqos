@@ -5,10 +5,12 @@
 Description=ADB Daemon proxy
 After=usb.service
 Before=adbd.service
+StartLimitBurst=10
+StartLimitIntervalSec=5
 
 [Service]
 Type=simple
-Restart=on-failure
+Restart=always
 User=root
 Environment="ADB_USB_FFS_PATH=/dev/usb-ffs/adb-relay"
 Environment="ADB_USB_FFS_NAME=adb-relay"
