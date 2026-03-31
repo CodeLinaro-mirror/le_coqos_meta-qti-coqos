@@ -10,6 +10,8 @@ RDEPENDS:${PN} += "\
     trace-emlog \
     trace-cmd \
     virglrenderer \
+    vulkan-layers-validation \
+    vulkan-tools \
     "
 
 # Linux adbd-relay
