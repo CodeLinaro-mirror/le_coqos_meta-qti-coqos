@@ -33,7 +33,7 @@ REQUIRED_DISTRO_FEATURES_class-native = ""
 REQUIRED_DISTRO_FEATURES_class-nativesdk = ""
 
 PACKAGECONFIG ??= "${@bb.utils.filter('DISTRO_FEATURES', 'vulkan', d)}"
-PACKAGECONFIG[vulkan] = "-Dvenus=true -Dvenus-validate=true,-Dvenus=false,vulkan-loader vulkan-headers"
+PACKAGECONFIG[vulkan] = "-Dvenus=true -Dvenus-validate=true,-Dvenus=false,vulkan-loader vulkan-headers vulkan-headers-vk-video"
 
 EXTRA_OEMESON:append = " \
             -Dplatforms=egl \
