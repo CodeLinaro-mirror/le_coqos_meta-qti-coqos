@@ -19,4 +19,10 @@ RDEPENDS:${PN} += "\
     adbd-relay \
     "
 
+# Test tools
+RDEPENDS:${PN} += "\
+    i2c-tools \
+    spitools \
+    "
+
 ALLOW_EMPTY:${PN} = "1"
