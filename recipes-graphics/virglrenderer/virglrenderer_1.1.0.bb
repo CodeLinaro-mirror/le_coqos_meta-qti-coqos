@@ -29,6 +29,7 @@ SRC_URI = " \
     file://0009-Unconditionally-use-glClearBufferXXX-instead-of-glCl-1.patch \
     file://0012-virgl-Implement-API-to-attach-dmabuf-backing-for-cla.patch \
     file://0013-Add-rgba-resources-backed-by-EGL-image-as-not-suppor.patch \
+    file://0014-vrend-Avoid-bitcasting-float-backed-inputs-in-SHL-US.patch \
 "
 
 S = "${WORKDIR}/git"

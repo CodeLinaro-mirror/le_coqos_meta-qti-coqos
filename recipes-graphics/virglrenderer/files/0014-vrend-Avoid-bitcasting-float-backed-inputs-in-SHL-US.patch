@@ -1,0 +1,69 @@
+From 27ebbcb43f55bc100b59d3c335f8321239ddd5e3 Mon Sep 17 00:00:00 2001
+From: Nicolas Chevalier <nchevali@qti.qualcomm.com>
+Date: Sun, 19 Apr 2026 01:44:01 +0200
+Subject: [PATCH] vrend: Avoid bitcasting float-backed inputs in SHL/USHR/UMUL.
+
+When a float-backed TGSI input is used by SHL, USHR or UMUL,
+virglrenderer may generate floatBitsToInt() or floatBitsToUint(),
+which reinterprets the IEEE754 bit pattern instead of performing a
+numeric conversion.
+
+Use ivec4/uvec4 for float-backed INPUT cases so the generated
+integer operations receive numerically converted values.
+
+Issue: COQOS-22360
+Change-Id: I687efd6b4bb7c0f5d7a1fb3d12a5b3f509f9b753
+---
+ src/vrend_shader.c | 22 ++++++++++++++++++++--
+ 1 file changed, 20 insertions(+), 2 deletions(-)
+
+diff --git a/src/vrend_shader.c b/src/vrend_shader.c
+index 6a26fdfe..53de9058 100644
+--- a/src/vrend_shader.c
++++ b/src/vrend_shader.c
+@@ -20,6 +20,10 @@
+  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+  * OTHER DEALINGS IN THE SOFTWARE.
+  *
++ * Changes from Qualcomm Technologies, Inc. are provided under the following license:
++ *
++ * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
++ * SPDX-License-Identifier: BSD-3-Clause-Clear
+  **************************************************************************/
+ 
+ #include "tgsi/tgsi_info.h"
+@@ -4777,7 +4781,14 @@ get_source_info(struct dump_ctx *ctx,
+             get_tesslevel_as_source(src_buf, prefix, input->glsl_name, &src->Register);
+          } else {
+             enum vrend_type_qualifier srcstypeprefix = stypeprefix;
+-            if (input->type != VEC_FLOAT) {
++            if (input->type == VEC_FLOAT) {
++               if (inst->Instruction.Opcode == TGSI_OPCODE_SHL &&
++                  i == 0)
++                  srcstypeprefix = IVEC4;
++               else if (inst->Instruction.Opcode == TGSI_OPCODE_USHR ||
++                        inst->Instruction.Opcode == TGSI_OPCODE_UMUL)
++                  srcstypeprefix = UVEC4;
++            } else {
+                if (stype == TGSI_TYPE_UNSIGNED)
+                   srcstypeprefix = UVEC4;
+                else if (stype == TGSI_TYPE_SIGNED)
+@@ -5770,7 +5781,14 @@ iter_instruction(struct tgsi_iterate_context *iter,
+       emit_arit_op2(">>");
+       break;
+    case TGSI_OPCODE_SHL:
+-      emit_arit_op2("<<");
++      emit_buff(&ctx->glsl_strbufs,
++               "%s = %s(%s((uvec4(%s) << uvec4(%s)))%s);\n",
++               dsts[0],
++               get_string(dinfo.dstconv),
++               get_string(dinfo.dtypeprefix),
++               srcs[0],
++               srcs[1],
++               writemask);
+       break;
+    case TGSI_OPCODE_MAD:
+       emit_buff(&ctx->glsl_strbufs, "%s = %s((%s * %s + %s)%s);\n", dsts[0], get_string(dinfo.dstconv), srcs[0], srcs[1], srcs[2], writemask);
+-- 
+2.49.0
+
