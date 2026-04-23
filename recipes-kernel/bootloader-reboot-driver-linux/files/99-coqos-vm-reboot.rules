@@ -1,0 +1,2 @@
+# Rebot to bootloader thwn coqos-vm-reboot driver gets the signal from Android GVM
+ACTION=="change", ENV{REBOOT_OEM}!="", RUN+="/sbin/reboot oem-$env{REBOOT_OEM}"
