@@ -1,0 +1,43 @@
+From 1e164d297f87675ca2741bbecfa0c6f015ae0db8 Mon Sep 17 00:00:00 2001
+From: Rafal Skierkowski <rskierko@qti.qualcomm.com>
+Date: Mon, 30 Jun 2025 07:25:12 +0000
+Subject: [PATCH] Add oem reboot reason storing.
+
+Add OEM reboot reason storing. Use same definitions for OEM reboot types
+as in EDK2 bootloader.
+This is needed to distinguish new reboot reason.
+
+Signed-off-by: Rafal Skierkowski <rskierko@qti.qualcomm.com>
+---
+ drivers/power/reset/msm-poweroff.c  | 1 +
+ include/linux/input/qpnp-power-on.h | 2 ++
+ 2 files changed, 3 insertions(+)
+
+diff --git a/drivers/power/reset/msm-poweroff.c b/drivers/power/reset/msm-poweroff.c
+index 178ae32fae3f..dedd60854783 100644
+--- a/drivers/power/reset/msm-poweroff.c
++++ b/drivers/power/reset/msm-poweroff.c
+@@ -504,6 +504,7 @@ static void msm_restart_prepare(const char *cmd)
+ 			if (!ret)
+ 				__raw_writel(0x6f656d00 | (code & 0xff),
+ 					     restart_reason);
++			reason = PON_RESTART_REASON_OEM_MIN + code;
+ 		} else if (!strncmp(cmd, "edl", 3)) {
+ 			enable_emergency_dload_mode();
+ 		} else if (!strnstr(cmd, "silent", 6)) {
+diff --git a/include/linux/input/qpnp-power-on.h b/include/linux/input/qpnp-power-on.h
+index 4d39a442a3ff..d3eadb07c847 100644
+--- a/include/linux/input/qpnp-power-on.h
++++ b/include/linux/input/qpnp-power-on.h
+@@ -59,6 +59,8 @@ enum pon_restart_reason {
+ 	PON_RESTART_REASON_NON_SILENT			= 0x0b,
+ 	PON_RESTART_REASON_FORCED_SILENT		= 0x0c,
+ 	PON_RESTART_REASON_FORCED_NON_SILENT	= 0x0d,
++	PON_RESTART_REASON_OEM_MIN		= 0x20,
++	PON_RESTART_REASON_OEM_MAX		= 0x3f,
+ };
+ 
+ #if IS_ENABLED(CONFIG_INPUT_QPNP_POWER_ON)
+-- 
+2.43.2
+

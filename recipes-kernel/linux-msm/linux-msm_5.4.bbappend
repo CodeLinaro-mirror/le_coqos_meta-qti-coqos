@@ -26,6 +26,9 @@ SRC_URI += "file://0004-msm-ais-v4l2_v2-Introduce-dmabuf-import-support.patch;pa
 # set appropriate log level for pci msm driver
 SRC_URI += "file://0001-pci-msm-replace-usage-of-pr_alert-macro-with-pr_info.patch"
 
+# this is needed for "reboot to bootloader" feature
+SRC_URI += "file://0001-Add-oem-reboot-reason-storing.patch"
+
 #--------------------------------------------------------------------------------------------
 # Put kernel config fragments here:
 #--------------------------------------------------------------------------------------------
