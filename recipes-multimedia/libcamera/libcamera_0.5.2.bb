@@ -9,20 +9,13 @@ LIC_FILES_CHKSUM = "\
 "
 
 SRC_URI = " \
-    git://git.libcamera.org/libcamera/libcamera.git;protocol=https;nobranch=1;rebaseable=1 \
-    file://0001-libcamera-process-Fix-compilation-for-some-aarch64-B.patch \
-    file://0002-libcamera-pipeline-Introduce-v4l2-loopback-pipeline-.patch \
-    file://0003-Backport-vivid-pipeline-support-into-v0.5.2.patch \
-    file://0004-libcamera-pipeline-vivid-Add-support-of-multiple-cap.patch \
-    file://0005-libcamera-pipeline-vivid-Fix-format-config-validatio.patch \
-    file://0006-libcamera-base-semaphore-Do-not-unlock-prematurely.patch \
+    ${PATH_TO_REPO}/external/libcamera/.git;protocol=${PROTO};destsuffix=external/libcamera \
 "
-
-SRCREV = "aa0a91c48ddb38c302390d5c4899cb9e093ddd24"
+SRCREV = "${AUTOREV}"
 
 PE = "1"
 
-S = "${WORKDIR}/git"
+S = "${WORKDIR}/external/libcamera"
 
 DEPENDS = "python3-pyyaml-native python3-jinja2-native python3-ply-native python3-jinja2-native udev openssl chrpath-native libevent libyaml"
 DEPENDS += "${@bb.utils.contains('DISTRO_FEATURES', 'qt', 'qtbase qtbase-native', '', d)}"
