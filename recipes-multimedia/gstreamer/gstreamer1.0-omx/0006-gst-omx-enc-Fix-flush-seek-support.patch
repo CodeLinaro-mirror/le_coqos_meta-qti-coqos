@@ -1,7 +1,7 @@
-From a5b8193669a68ca07adf08ae3edd7a0f4f188c4a Mon Sep 17 00:00:00 2001
+From 1ffd7fa7358d42280b91e09325148786a2200bc7 Mon Sep 17 00:00:00 2001
 From: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
 Date: Sat, 24 May 2025 23:24:10 +0200
-Subject: [PATCH 2/3] gst-omx: enc: Fix flush/seek support.
+Subject: [PATCH] gst-omx: enc: Fix flush/seek support.
 
 * Support FLUSH_START event: set in/out ports to flushing state in the
 event handler and wait until the main loop thread is stopped.
@@ -9,12 +9,13 @@ event handler and wait until the main loop thread is stopped.
 OMX encoder cannot complete flush in this state and fails on timeout.
 
 Signed-off-by: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+
 ---
- omx/gstomxvideoenc.c | 54 ++++++++++++++++++++++++++++++++++----------
+ omx/gstomxvideoenc.c | 54 +++++++++++++++++++++++++-------
  1 file changed, 42 insertions(+), 12 deletions(-)
 
 diff --git a/omx/gstomxvideoenc.c b/omx/gstomxvideoenc.c
-index a6442bc..2bd0fea 100755
+index ffccfce..5cbca8a 100755
 --- a/omx/gstomxvideoenc.c
 +++ b/omx/gstomxvideoenc.c
 @@ -485,6 +485,8 @@ static GstFlowReturn gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
@@ -73,7 +74,7 @@ index a6442bc..2bd0fea 100755
    gst_omx_port_set_flushing (self->enc_in_port, 5 * GST_SECOND, FALSE);
    gst_omx_port_set_flushing (self->enc_out_port, 5 * GST_SECOND, FALSE);
    gst_omx_port_populate (self->enc_out_port);
-@@ -4424,6 +4421,39 @@ gst_omx_video_enc_propose_allocation (GstVideoEncoder * encoder,
+@@ -4420,6 +4417,39 @@ gst_omx_video_enc_propose_allocation (GstVideoEncoder * encoder,
        (gst_omx_video_enc_parent_class)->propose_allocation (encoder, query);
  }
  
@@ -113,6 +114,3 @@ index a6442bc..2bd0fea 100755
  static GList *
  filter_supported_formats (GList * negotiation_map)
  {
--- 
-2.49.0
-
