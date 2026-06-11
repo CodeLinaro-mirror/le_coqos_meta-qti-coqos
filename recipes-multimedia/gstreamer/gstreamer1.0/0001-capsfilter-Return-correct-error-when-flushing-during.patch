@@ -1,0 +1,31 @@
+From 95bb19a3e71c9a8cee75e9b6583180a65405b744 Mon Sep 17 00:00:00 2001
+From: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+Date: Thu, 5 Jun 2025 14:13:28 +0200
+Subject: [PATCH] capsfilter: Return correct error when flushing during buf
+ preparation.
+
+It's possible that the pad is in flushing state when caps are being
+set, and gst_pad_set_caps() will return FALSE. Thus, check for that
+and return corresponding code instead of GST_FLOW_NOT_NEGOTIATED.
+---
+ plugins/elements/gstcapsfilter.c | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/plugins/elements/gstcapsfilter.c b/plugins/elements/gstcapsfilter.c
+index 05d8b6cc7..c58f098b8 100644
+--- a/plugins/elements/gstcapsfilter.c
++++ b/plugins/elements/gstcapsfilter.c
+@@ -434,7 +434,10 @@ gst_capsfilter_prepare_buf (GstBaseTransform * trans, GstBuffer * input,
+             pending_events = NULL;
+           }
+         } else {
+-          ret = GST_FLOW_NOT_NEGOTIATED;
++          if (GST_PAD_IS_FLUSHING (trans->srcpad))
++            ret = GST_FLOW_FLUSHING;
++          else
++            ret = GST_FLOW_NOT_NEGOTIATED;
+         }
+       } else {
+         gst_capsfilter_push_pending_events (filter, pending_events);
+-- 
+2.49.0
