@@ -1,0 +1,32 @@
+From d5a03804607157145df3e7d1738d377b7bf6aac9 Mon Sep 17 00:00:00 2001
+From: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+Date: Thu, 9 Jan 2025 11:13:24 +0100
+Subject: [PATCH] gst-omx: enc: Support GstForceKeyUnit event on QTI platform.
+
+Use proper OMX output port index when forcing a key frame since
+this is required by the QTI OMX implementation.
+
+Signed-off-by: Andrii Cherniavskyi <achernia@qti.qualcomm.com>
+---
+ omx/gstomxvideoenc.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/omx/gstomxvideoenc.c b/omx/gstomxvideoenc.c
+index 23982c7..b7bf3b5 100755
+--- a/omx/gstomxvideoenc.c
++++ b/omx/gstomxvideoenc.c
+@@ -3872,7 +3872,11 @@ gst_omx_video_enc_handle_frame (GstVideoEncoder * encoder,
+       OMX_CONFIG_INTRAREFRESHVOPTYPE config;
+ 
+       GST_OMX_INIT_STRUCT (&config);
++#if defined(USE_OMX_TARGET_QTI)
++      config.nPortIndex = self->enc_out_port->index;
++#else
+       config.nPortIndex = port->index;
++#endif
+       config.IntraRefreshVOP = OMX_TRUE;
+ 
+       GST_DEBUG_OBJECT (self, "Forcing a keyframe");
+-- 
+2.43.2
+

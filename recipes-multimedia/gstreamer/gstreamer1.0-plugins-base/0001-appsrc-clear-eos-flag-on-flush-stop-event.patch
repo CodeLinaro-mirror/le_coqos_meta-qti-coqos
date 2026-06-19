@@ -1,0 +1,26 @@
+From 8ac17cb65174259b2ffe89ce0bd918a65879d784 Mon Sep 17 00:00:00 2001
+From: Jeongki Kim <jeongki.kim@jeongki.kim>
+Date: Thu, 22 Feb 2024 23:41:12 +0900
+Subject: [PATCH] appsrc: clear eos flag on flush stop event
+
+Part-of: <https://gitlab.freedesktop.org/gstreamer/gstreamer/-/commit/576dbcbd88b8e7c6af8818c017df197af4a191b6>
+Branch: main
+---
+ gst-libs/gst/app/gstappsrc.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/gst-libs/gst/app/gstappsrc.c b/gst-libs/gst/app/gstappsrc.c
+index c937c8d42..66a78457a 100644
+--- a/gst-libs/gst/app/gstappsrc.c
++++ b/gst-libs/gst/app/gstappsrc.c
+@@ -839,6 +839,7 @@ gst_app_src_send_event (GstElement * element, GstEvent * event)
+     case GST_EVENT_FLUSH_STOP:
+       g_mutex_lock (&priv->mutex);
+       gst_app_src_flush_queued (appsrc, TRUE);
++      priv->is_eos = FALSE;
+       g_mutex_unlock (&priv->mutex);
+       break;
+     default:
+-- 
+2.43.2
+

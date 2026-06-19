@@ -1,0 +1,102 @@
+From a083485069bab55f4506ba7f0915dcc061af7948 Mon Sep 17 00:00:00 2001
+From: Artur Tynecki <atynecki@qti.qualcomm.com>
+Date: Fri, 18 Oct 2024 13:00:45 +0200
+Subject: [PATCH] Revert "Optimize the latency of resolution change"
+
+Signed-off-by: Artur Tynecki <atynecki@qti.qualcomm.com>
+---
+ omx/gstomxvideodec.c | 50 +++++++-------------------------------------
+ omx/gstomxvideodec.h |  2 --
+ 2 files changed, 7 insertions(+), 45 deletions(-)
+
+diff --git a/omx/gstomxvideodec.c b/omx/gstomxvideodec.c
+index c1d6523..ec96b49 100644
+--- a/omx/gstomxvideodec.c
++++ b/omx/gstomxvideodec.c
+@@ -261,25 +261,9 @@ _omx_out_buffer_create (GstOMXVideoDec * dec, GstOMXBuffer * pBuffer)
+     gst_mini_object_set_qdata (GST_MINI_OBJECT_CAST (out_buf),
+       dec->omx_outbuf_quark, pOutBuf, _omx_out_buffer_destroy);
+ 
+-    if ((dec->width != vinfo->width) || (dec->height != vinfo->height)) {
+-
+-      GST_DEBUG_OBJECT (dec, "resolution changed width:%d->%d height:%d->%d", dec->width, vinfo->width, dec->height, vinfo->height);
+-      if (dec->width != 0 || dec->height != 0) {
+-        GST_BUFFER_PTS (out_buf) = GST_CLOCK_TIME_NONE;
+-        dec->video_info_changed = TRUE;
+-      } else {
+-        GST_BUFFER_PTS (out_buf) =
+-        gst_util_uint64_scale (pBuffer->omx_buf->nTimeStamp, GST_SECOND,
+-          OMX_TICKS_PER_SECOND);
+-      }
+-
+-      dec->width = vinfo->width;
+-      dec->height = vinfo->height;
+-    } else {
+-      GST_BUFFER_PTS (out_buf) =
+-        gst_util_uint64_scale (pBuffer->omx_buf->nTimeStamp, GST_SECOND,
+-          OMX_TICKS_PER_SECOND);
+-    }
++    GST_BUFFER_PTS (out_buf) =
++      gst_util_uint64_scale (pBuffer->omx_buf->nTimeStamp, GST_SECOND,
++        OMX_TICKS_PER_SECOND);
+ 
+     if (pBuffer->omx_buf->nTickCount != 0)
+       GST_BUFFER_DURATION (out_buf) =
+@@ -552,9 +536,6 @@ gst_omx_video_dec_init (GstOMXVideoDec * self)
+   g_mutex_init (&self->drain_lock);
+   g_cond_init (&self->drain_cond);
+   self->outstanding_bufs = NULL;
+-  self->width = 0;
+-  self->height = 0;
+-  self->video_info_changed = FALSE;
+   self->output_picture_order_mode = GST_OMX_VIDEO_DEC_OUTPUT_PICTURE_ORDER_MODE_DEFAULT;
+   self->low_latency_mode = GST_OMX_VIDEO_DEC_LOW_LATENCY_MODE_DEFAULT;
+   self->secure = GST_OMX_VIDEO_DEC_SECURE_PLAYBACK_DEFAULT;
+@@ -2300,27 +2281,10 @@ gst_omx_video_dec_loop (GstOMXVideoDec * self)
+         frame->output_buffer = _omx_out_buffer_create (self, buf);
+ 
+         buf = NULL;
+-        if (frame->output_buffer && !GST_CLOCK_TIME_IS_VALID(frame->output_buffer->pts) && self->video_info_changed) {
+-          frame->output_buffer = gst_buffer_ref (frame->output_buffer);
+-#ifdef GST_VDEC_PUSH_EVENT_API_EXPOSED
+-          for (cur = frame->events; cur; ) {
+-            event = (GstEvent*) cur->data;
+-            if (GST_EVENT_TYPE (event) == GST_EVENT_SEGMENT) {
+-              GST_DEBUG_OBJECT (self, "Push the cached segment event before pushing new buffer");
+-              gst_video_decoder_push_event (GST_VIDEO_DECODER (self), event);
+-              frame->events = g_list_delete_link (frame->events, cur);
+-              break;
+-            }
+-            cur = g_list_next (cur);
+-          }
+-#endif
+-          self->video_info_changed = FALSE;
+-          flow_ret = gst_pad_push (GST_VIDEO_DECODER_SRC_PAD (self), frame->output_buffer);
+-          gst_video_decoder_release_frame (GST_VIDEO_DECODER (self), frame);
+-        } else {
+-          flow_ret =
+-            gst_video_decoder_finish_frame (GST_VIDEO_DECODER (self), frame);
+-        }
++
++        flow_ret =
++          gst_video_decoder_finish_frame (GST_VIDEO_DECODER (self), frame);
++
+         frame = NULL;
+       }
+ 
+diff --git a/omx/gstomxvideodec.h b/omx/gstomxvideodec.h
+index 0f844c0..a859164 100644
+--- a/omx/gstomxvideodec.h
++++ b/omx/gstomxvideodec.h
+@@ -104,8 +104,6 @@ struct _GstOMXVideoDec
+   GQuark omx_outbuf_quark;
+ #endif
+   GList *outstanding_bufs;
+-  gint width;
+-  gint height;
+   gboolean video_info_changed;
+   guint output_picture_order_mode;
+   gboolean low_latency_mode;
+-- 
+2.43.2
+
